@@ -1,0 +1,34 @@
+# Dependencies
+/node_modules/
+/vendor/
+
+# Environment
+.env
+.env.local
+
+# Uploads
+/uploads/*
+!/uploads/.gitkeep
+
+# Debug & Test Files
+debug_*.php
+test_*.php
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+check_*.php
+migrate*.php
+setup_*.php
+clear_*.php
