@@ -1,0 +1,350 @@
+body {
+    box-sizing: border-box;
+}
+
+* {
+    font-family: 'Montserrat', sans-serif;
+}
+
+.glassmorphism {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.hero-bg {
+    /* Background dengan gambar landingKost dan overlay gelap untuk keterbacaan teks */
+    background-image: linear-gradient(rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.6)), url('../img/landingKost.jpg?v=1.0');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    transition: background-position 0.1s ease-out;
+    position: relative;
+    z-index: 0;
+}
+
+.hero-bg::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(45deg, rgba(59, 130, 246, 0.05), rgba(147, 51, 234, 0.05));
+    pointer-events: none;
+    z-index: -1;
+}
+
+.card-hover {
+    transition: all 0.3s ease;
+}
+
+.card-hover:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 20px 40px rgba(74, 144, 226, 0.2);
+}
+
+/* Animasi baru: Fade In dan Slide Up */
+.animate-fade-in-up {
+    /* Mengatur agar elemen awalnya tidak terlihat */
+    opacity: 0;
+    /* Menerapkan animasi, 'forwards' menjaga state akhir animasi */
+    animation: fadeInUp 0.8s ease-out forwards;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Kelas untuk memberikan delay pada animasi */
+.animation-delay-300 {
+    animation-delay: 300ms;
+}
+.animation-delay-600 {
+    animation-delay: 600ms;
+}
+.animation-delay-900 {
+    animation-delay: 900ms;
+}
+.scroll-smooth {
+    scroll-behavior: smooth;
+}
+
+.navbar-blur {
+    backdrop-filter: blur(20px);
+    background: rgba(255, 255, 255, 0.95);
+}
+
+.navbar-transparent {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+}
+
+.navbar-transparent .nav-link {
+    color: white !important;
+}
+
+.navbar-transparent .nav-link:hover {
+    color: #fbbf24 !important;
+}
+
+.navbar-transparent .login-btn {
+    color: white !important;
+    border: 1px solid white;
+}
+
+.navbar-transparent .login-btn:hover {
+    background: white;
+    color: #4A90E2 !important;
+}
+
+.navbar-transparent .register-btn {
+    background: white;
+    color: #4A90E2 !important;
+}
+
+.navbar-transparent .register-btn:hover {
+    background: #fbbf24;
+    color: white !important;
+}
+
+.navbar-transparent .logo-text {
+    color: white !important;
+}
+
+.testimonial-card {
+    background: linear-gradient(145deg, #ffffff, #f0f9ff);
+    border-left: 4px solid #4A90E2;
+}
+
+/* --- Logo Styling --- */
+.logo-text {
+    color: #1f2937; /* Default: gray-800 */
+    transition: color 0.3s ease;
+}
+
+.logo-highlight {
+    color: #4A90E2; /* Default: blue-500 */
+    transition: color 0.3s ease;
+}
+
+.logo-icon {
+    color: #4A90E2; /* Default: blue-500 */
+    transition: color 0.3s ease;
+}
+
+/* Style untuk logo saat navbar transparan */
+.navbar-transparent .logo-text {
+    color: white !important;
+}
+
+.navbar-transparent .logo-highlight,
+.navbar-transparent .logo-icon {
+    color: #fbbf24 !important; /* Warna kuning (accent) */
+}
+
+/* Style untuk mobile menu button saat navbar transparan */
+.navbar-transparent #mobile-menu {
+    color: white !important;
+}
+
+.navbar-transparent #mobile-menu:hover {
+    color: #fbbf24 !important;
+}
+
+/* Style untuk mobile menu button saat navbar blur */
+.navbar-blur #mobile-menu {
+    color: #374151 !important; /* gray-700 */
+}
+
+.navbar-blur #mobile-menu:hover {
+    color: #4A90E2 !important; /* blue-500 */
+}
+
+/* Ensure mobile menu button is always visible on mobile */
+#mobile-menu {
+    display: block !important;
+    cursor: pointer;
+    padding: 0.375rem;
+    border-radius: 0.375rem;
+    transition: all 0.3s ease;
+    background-color: rgba(0, 0, 0, 0.05);
+    border: none;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+#mobile-menu:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Mobile responsive styles */
+@media (max-width: 767px) {
+    #mobile-menu {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+    
+    /* Hero Section Mobile */
+    .hero-bg {
+        background-attachment: scroll;
+        min-height: 100vh;
+        padding-top: 80px;
+    }
+    
+    .hero-bg h1 {
+        font-size: 1.875rem !important;
+        line-height: 1.2;
+    }
+    
+    .hero-bg p {
+        font-size: 1rem !important;
+        margin-bottom: 1.5rem;
+    }
+    
+    /* Buttons Mobile */
+    .hero-bg .flex {
+        flex-direction: column !important;
+        gap: 1rem !important;
+    }
+    
+    .hero-bg button,
+    .hero-bg a {
+        width: 100%;
+        padding: 0.75rem 1rem !important;
+    }
+    
+    /* Container Mobile */
+    .container {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+    
+    /* Grid Mobile */
+    .grid {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .md\:grid-cols-2 {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .lg\:grid-cols-3 {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .md\:grid-cols-3 {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .lg\:grid-cols-4 {
+        grid-template-columns: 1fr !important;
+    }
+    
+    /* Text Mobile */
+    h1, h2, h3 {
+        word-break: break-word;
+    }
+    
+    .text-5xl {
+        font-size: 2rem !important;
+    }
+    
+    .text-4xl {
+        font-size: 1.875rem !important;
+    }
+    
+    .text-3xl {
+        font-size: 1.5rem !important;
+    }
+    
+    .text-2xl {
+        font-size: 1.25rem !important;
+    }
+    
+    .text-xl {
+        font-size: 1rem !important;
+    }
+    
+    /* Card Mobile */
+    .card-hover {
+        border-radius: 0.75rem !important;
+    }
+    
+    .rounded-xl {
+        border-radius: 0.75rem !important;
+    }
+    
+    .rounded-2xl {
+        border-radius: 1rem !important;
+    }
+    
+    /* Padding Mobile */
+    .px-8 {
+        padding-left: 1.5rem !important;
+        padding-right: 1.5rem !important;
+    }
+    
+    .py-20 {
+        padding-top: 2.5rem !important;
+        padding-bottom: 2.5rem !important;
+    }
+    
+    .py-16 {
+        padding-top: 2rem !important;
+        padding-bottom: 2rem !important;
+    }
+    
+    .p-8 {
+        padding: 1.5rem !important;
+    }
+    
+    .p-6 {
+        padding: 1.25rem !important;
+    }
+    
+    /* Mobile Menu */
+    #mobile-nav {
+        width: 100%;
+        height: 100vh;
+        overflow-y: auto;
+        padding-top: 80px;
+    }
+    
+    #mobile-nav .space-y-6 {
+        padding: 1.5rem !important;
+    }
+    
+    /* Image heights */
+    .h-48 {
+        height: 10rem !important;
+    }
+    
+    /* Spacing */
+    .gap-8 {
+        gap: 1rem !important;
+    }
+    
+    .space-y-8 > * + * {
+        margin-top: 1rem !important;
+    }
+    
+    .mb-16 {
+        margin-bottom: 1.5rem !important;
+    }
+    
+    .gap-12 {
+        gap: 1.5rem !important;
+    }
+}
+
+
