@@ -23,17 +23,24 @@ class SessionManager {
         $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown';
         $ip_address = $this->getClientIP();
         
-        $sql = "INSERT INTO user_sessions (id_user, session_token, device_name, user_agent, ip_address) 
-                VALUES (?, ?, ?, ?, ?)";
-        $stmt = mysqli_prepare($this->conn, $sql);
-        mysqli_stmt_bind_param($stmt, "issss", $user_id, $token, $device_name, $user_agent, $ip_address);
-        
-        if (mysqli_stmt_execute($stmt)) {
+        try {
+            $sql = "INSERT INTO user_sessions (id_user, session_token, device_name, user_agent, ip_address) 
+                    VALUES (?, ?, ?, ?, ?)";
+            $stmt = mysqli_prepare($this->conn, $sql);
+            if (!$stmt) {
+                error_log("SessionManager: prepare failed for createSessionToken");
+                return false;
+            }
+            mysqli_stmt_bind_param($stmt, "issss", $user_id, $token, $device_name, $user_agent, $ip_address);
+            
+            if (mysqli_stmt_execute($stmt)) {
+                mysqli_stmt_close($stmt);
+                return $token;
+            }
             mysqli_stmt_close($stmt);
-            return $token;
+        } catch (Throwable $e) {
+            error_log("SessionManager Error: " . $e->getMessage());
         }
-        
-        mysqli_stmt_close($stmt);
         return false;
     }
     
@@ -41,19 +48,27 @@ class SessionManager {
      * Validate session token
      */
     public function validateSessionToken($token) {
-        $sql = "SELECT id_user, is_active FROM user_sessions 
-                WHERE session_token = ? AND is_active = 1 
-                LIMIT 1";
-        $stmt = mysqli_prepare($this->conn, $sql);
-        mysqli_stmt_bind_param($stmt, "s", $token);
-        mysqli_stmt_execute($stmt);
-        $result = mysqli_stmt_get_result($stmt);
-        mysqli_stmt_close($stmt);
-        
-        if ($result && mysqli_num_rows($result) > 0) {
-            $session = mysqli_fetch_assoc($result);
-            $this->updateLastActivity($token);
-            return $session['id_user'];
+        try {
+            $sql = "SELECT id_user, is_active FROM user_sessions 
+                    WHERE session_token = ? AND is_active = 1 
+                    LIMIT 1";
+            $stmt = mysqli_prepare($this->conn, $sql);
+            if (!$stmt) {
+                error_log("SessionManager: prepare failed for validateSessionToken");
+                return false;
+            }
+            mysqli_stmt_bind_param($stmt, "s", $token);
+            mysqli_stmt_execute($stmt);
+            $result = mysqli_stmt_get_result($stmt);
+            mysqli_stmt_close($stmt);
+            
+            if ($result && mysqli_num_rows($result) > 0) {
+                $session = mysqli_fetch_assoc($result);
+                $this->updateLastActivity($token);
+                return $session['id_user'];
+            }
+        } catch (Throwable $e) {
+            error_log("SessionManager Error: " . $e->getMessage());
         }
         
         return false;

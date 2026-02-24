@@ -17,16 +17,22 @@ function checkMultiDeviceSession($conn) {
     if ($user_id) {
         // Restore session data if missing (Role, Fullname, Logged In status)
         if (!isset($_SESSION['user_logged_in']) || !isset($_SESSION['role'])) {
-            $stmt = $conn->prepare("SELECT role, nama_lengkap FROM user WHERE id_user = ?");
-            $stmt->bind_param("i", $user_id);
-            $stmt->execute();
-            $res = $stmt->get_result();
-            if ($user = $res->fetch_assoc()) {
-                $_SESSION['user_logged_in'] = true;
-                $_SESSION['role'] = $user['role'];
-                $_SESSION['fullname'] = $user['nama_lengkap'];
+            try {
+                $stmt = $conn->prepare("SELECT role, nama_lengkap FROM user WHERE id_user = ?");
+                if ($stmt) {
+                    $stmt->bind_param("i", $user_id);
+                    $stmt->execute();
+                    $res = $stmt->get_result();
+                    if ($res && $user = $res->fetch_assoc()) {
+                        $_SESSION['user_logged_in'] = true;
+                        $_SESSION['role'] = $user['role'];
+                        $_SESSION['fullname'] = $user['nama_lengkap'];
+                    }
+                    $stmt->close();
+                }
+            } catch (Throwable $e) {
+                error_log("SessionChecker Restore Error: " . $e->getMessage());
             }
-            $stmt->close();
         }
 
         if (!isset($_SESSION['user_id'])) {
@@ -45,18 +51,24 @@ function checkMultiDeviceSession($conn) {
  * Get current session info
  */
 function getCurrentSessionInfo($conn, $token) {
-    $sql = "SELECT id_session, id_user, device_name, user_agent, ip_address, login_time, last_activity
-            FROM user_sessions 
-            WHERE session_token = ? AND is_active = 1
-            LIMIT 1";
-    $stmt = mysqli_prepare($conn, $sql);
-    mysqli_stmt_bind_param($stmt, "s", $token);
-    mysqli_stmt_execute($stmt);
-    $result = mysqli_stmt_get_result($stmt);
-    mysqli_stmt_close($stmt);
-    
-    if ($result && mysqli_num_rows($result) > 0) {
-        return mysqli_fetch_assoc($result);
+    try {
+        $sql = "SELECT id_session, id_user, device_name, user_agent, ip_address, login_time, last_activity
+                FROM user_sessions 
+                WHERE session_token = ? AND is_active = 1
+                LIMIT 1";
+        $stmt = mysqli_prepare($conn, $sql);
+        if (!$stmt) return null;
+        
+        mysqli_stmt_bind_param($stmt, "s", $token);
+        mysqli_stmt_execute($stmt);
+        $result = mysqli_stmt_get_result($stmt);
+        mysqli_stmt_close($stmt);
+        
+        if ($result && mysqli_num_rows($result) > 0) {
+            return mysqli_fetch_assoc($result);
+        }
+    } catch (Throwable $e) {
+        error_log("getCurrentSessionInfo Error: " . $e->getMessage());
     }
     
     return null;

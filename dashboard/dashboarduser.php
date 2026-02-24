@@ -6,9 +6,9 @@ if (!isset($_SESSION['user_logged_in']) || !in_array($_SESSION['role'], ['penyew
     exit();
 }
 
-include '../config/db.php';
-include '../config/SessionChecker.php';
-include '../config/SessionManager.php';
+include_once '../config/db.php';
+include_once '../config/SessionChecker.php';
+// SessionManager.php is already included via SessionChecker.php
 
 // Validate multi-device session
 if (!checkMultiDeviceSession($conn)) {
@@ -25,11 +25,22 @@ $userPhoto = $_SESSION['foto_profil'] ?? null;
 $id_penyewa = $_SESSION['user_id'];
 
 // Ambil jumlah notifikasi yang belum dibaca dari database
-$stmt_notif = $conn->prepare("SELECT COUNT(*) as count FROM notifications WHERE id_user = ? AND is_read = 0");
-$stmt_notif->bind_param("i", $id_penyewa);
-$stmt_notif->execute();
-$notif_count = $stmt_notif->get_result()->fetch_assoc()['count'];
-$stmt_notif->close();
+$notif_count = 0;
+try {
+    $stmt_notif = $conn->prepare("SELECT COUNT(*) as count FROM notifications WHERE id_user = ? AND is_read = 0");
+    if ($stmt_notif) {
+        $stmt_notif->bind_param("i", $id_penyewa);
+        $stmt_notif->execute();
+        $notif_result = $stmt_notif->get_result();
+        if ($notif_result) {
+            $notif_count = $notif_result->fetch_assoc()['count'] ?? 0;
+        }
+        $stmt_notif->close();
+    }
+} catch (Throwable $e) {
+    error_log("Notification count error: " . $e->getMessage());
+    $notif_count = 0;
+}
 
 // Ambil data Kos untuk ditampilkan
 $search = $_GET['search'] ?? '';
@@ -81,7 +92,7 @@ try {
         $wishlist_kost[] = $row['id_kost'];
     }
     $stmt_wishlist->close();
-} catch (Exception $e) {
+} catch (Throwable $e) {
     // Silently fail if wishlist table doesn't exist yet
     $wishlist_kost = [];
 }

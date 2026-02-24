@@ -8,9 +8,9 @@ if (!isset($_SESSION['user_logged_in']) || $_SESSION['role'] !== 'admin') {
 }
 
 // Hanya butuh koneksi untuk header atau fungsi lain
-include '../config/db.php';
-include '../config/SessionChecker.php';
-include '../config/SessionManager.php';
+include_once '../config/db.php';
+include_once '../config/SessionChecker.php';
+// SessionManager.php is already included via SessionChecker.php
 
 // Validate multi-device session
 if (!checkMultiDeviceSession($conn)) {
@@ -26,28 +26,52 @@ $adminID = $_SESSION['user_id'];
 // QUERY STATISTIK UTAMA ADMIN (Untuk Dashboard Ringkas)
 // =======================================================
 // Catatan: Query ini dieksekusi HANYA SEKALI di halaman utama
-$sql_stats = "SELECT 
-    (SELECT COUNT(id_user) FROM user) AS total_user,
-    (SELECT COUNT(id_user) FROM user WHERE role = 'pemilik') AS total_pemilik,
-    (SELECT COUNT(id_kost) FROM kost) AS total_kost,
-    (SELECT COUNT(id_booking) FROM booking WHERE status IN ('dibayar', 'selesai')) AS total_booking_aktif,
-    (SELECT COUNT(id_complaint) FROM complaint WHERE status IN ('baru', 'diproses')) AS total_complaint_open,
-    (SELECT COUNT(id_payment) FROM pembayaran WHERE status_pembayaran = 'menunggu') AS total_payment_pending,
-    (SELECT COUNT(*) FROM notifications WHERE id_user = {$adminID} AND is_read = 0) AS total_unread_notif,
-    (SELECT COUNT(id_user) FROM user WHERE role = 'penyewa') AS total_penyewa";
-$stats = $conn->query($sql_stats)->fetch_assoc();
-$total_penyewa = $stats['total_user'] - $stats['total_pemilik'] - 1;
+$stats = [
+    'total_user' => 0,
+    'total_pemilik' => 0,
+    'total_kost' => 0,
+    'total_booking_aktif' => 0,
+    'total_complaint_open' => 0,
+    'total_payment_pending' => 0,
+    'total_unread_notif' => 0,
+    'total_penyewa' => 0
+];
+
+try {
+    $sql_stats = "SELECT 
+        (SELECT COUNT(id_user) FROM user) AS total_user,
+        (SELECT COUNT(id_user) FROM user WHERE role = 'pemilik') AS total_pemilik,
+        (SELECT COUNT(id_kost) FROM kost) AS total_kost,
+        (SELECT COUNT(id_booking) FROM booking WHERE status IN ('dibayar', 'selesai')) AS total_booking_aktif,
+        (SELECT COUNT(id_complaint) FROM complaint WHERE status IN ('baru', 'diproses')) AS total_complaint_open,
+        (SELECT COUNT(id_payment) FROM pembayaran WHERE status_pembayaran = 'menunggu') AS total_payment_pending,
+        (SELECT COUNT(*) FROM notifications WHERE id_user = {$adminID} AND is_read = 0) AS total_unread_notif,
+        (SELECT COUNT(id_user) FROM user WHERE role = 'penyewa') AS total_penyewa";
+    $stats_res = $conn->query($sql_stats);
+    if ($stats_res) {
+        $stats = $stats_res->fetch_assoc();
+    }
+} catch (Throwable $e) {
+    error_log("Admin stats query error: " . $e->getMessage());
+}
+
+$total_penyewa = ($stats['total_user'] ?? 0) - ($stats['total_pemilik'] ?? 0) - 1;
 
 // Daftar 5 Pembayaran Terbaru (Untuk Dashboard Ringkas)
-$sql_latest_payments = "
-    SELECT 
-        p.jumlah, p.tanggal_pembayaran, p.status_pembayaran, u.nama_lengkap
-    FROM pembayaran p
-    JOIN booking b ON p.id_booking = b.id_booking
-    JOIN user u ON b.id_penyewa = u.id_user
-    ORDER BY p.tanggal_pembayaran DESC LIMIT 5
-";
-$res_latest_payments = $conn->query($sql_latest_payments); //
+$res_latest_payments = false;
+try {
+    $sql_latest_payments = "
+        SELECT 
+            p.jumlah, p.tanggal_pembayaran, p.status_pembayaran, u.nama_lengkap
+        FROM pembayaran p
+        JOIN booking b ON p.id_booking = b.id_booking
+        JOIN user u ON b.id_penyewa = u.id_user
+        ORDER BY p.tanggal_pembayaran DESC LIMIT 5
+    ";
+    $res_latest_payments = $conn->query($sql_latest_payments);
+} catch (Throwable $e) {
+    error_log("Latest payments query error: " . $e->getMessage());
+}
 
 ?>
 <!DOCTYPE html>
