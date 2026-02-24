@@ -52,6 +52,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $mail->Password = 'dupi ihcu tylj dmvf'; // App password for Gmail SMTP
                 $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
                 $mail->Port = 587;
+                $mail->Timeout = 10; // 10 seconds timeout
+                $mail->SMTPConnectTimeout = 10;
 
                 // Penerima
                 $mail->setFrom('willyjuaness@gmail.com', 'KosConnect');
@@ -204,9 +206,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <button type="button" id="togglePassword" class="toggle-password"><i class='bx bx-show'></i></button>
             </div>
 
-            <button type="button" class="btn-register" onclick="submitRegisterForm()">
+            <button type="button" id="btnRegister" class="btn-register" onclick="submitRegisterForm()">
                 <i class='bx bx-user-plus'></i>
-                Register
+                <span id="btnText">Register</span>
             </button>
 
             <div class="login-link">
@@ -256,12 +258,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         function submitRegisterForm() {
             const form = document.querySelector('.register-form');
             const passwordField = document.getElementById('password').value;
+            const btnRegister = document.getElementById('btnRegister');
+            const btnText = document.getElementById('btnText');
 
             // 1. Validasi Client-side (Cek panjang password)
             if (passwordField.length < 6) {
                 showMessage('Password minimal 6 karakter', 'error');
                 return;
             }
+
+            // Show Loading State
+            btnRegister.disabled = true;
+            btnRegister.style.opacity = '0.7';
+            btnRegister.style.cursor = 'not-allowed';
+            btnText.textContent = 'Memproses...';
 
             // 2. Jika validasi Client-side lolos, kirim form ke PHP
             form.submit();

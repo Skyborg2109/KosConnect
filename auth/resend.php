@@ -44,6 +44,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $mail->Password = 'dupi ihcu tylj dmvf'; // App password for Gmail SMTP
             $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
             $mail->Port = 587;
+            $mail->Timeout = 10;
+            $mail->SMTPConnectTimeout = 10;
 
             $mail->setFrom('willyjuaness@gmail.com', 'KosConnect');
             $mail->addAddress($email);
