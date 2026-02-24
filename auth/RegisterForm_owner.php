@@ -103,7 +103,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($emailSent) {
                 $_SESSION['registration_success'] = "Registrasi berhasil! Silakan periksa email Anda untuk aktivasi akun.";
             } else {
-                $error_message = "❌ Registrasi berhasil, tetapi gagal mengirim email aktivasi. Silakan hubungi admin.";
+                // FALLBACK CERDAS: Jika di Railway dan email gagal, aktifkan akun secara otomatis
+                if (getenv('MYSQLHOST')) {
+                    $id_user = mysqli_insert_id($conn);
+                    mysqli_query($conn, "UPDATE user SET is_active = 1 WHERE id_user = $id_user");
+                    $_SESSION['registration_success'] = "Registrasi berhasil sebagai Pemilik! (Email gagal dikirim, tetapi akun Anda telah diaktifkan otomatis).";
+                } else {
+                    $error_message = "❌ Registrasi berhasil, tetapi gagal mengirim email aktivasi. Silakan hubungi admin.";
+                }
             }
         } else {
             $error_message = "❌ Terjadi kesalahan saat pendaftaran: " . mysqli_error($conn);
