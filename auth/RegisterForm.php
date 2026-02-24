@@ -8,6 +8,7 @@ use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
 require '../vendor/autoload.php';
+require '../services/EmailService.php';
 
 $success_message = '';
 $error_message = '';
@@ -40,65 +41,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         mysqli_stmt_bind_param($stmt, "sssss", $fullname, $email, $password_hashed, $role, $activation_token);
 
         if (mysqli_stmt_execute($stmt)) {
-            // 3. Kirim email konfirmasi menggunakan PHPMailer
-            $mail = new PHPMailer(true); // Aktifkan exception
-            try {
-                // Konfigurasi Server
-                // $mail->SMTPDebug = 2; // Aktifkan untuk debug detail
-                $mail->isSMTP();
-                $mail->Host = 'smtp.gmail.com';
-                $mail->SMTPAuth = true;
-                $mail->Username = 'willyjuaness@gmail.com';
-                $mail->Password = 'dupi ihcu tylj dmvf'; // App password for Gmail SMTP
-                $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-                $mail->Port = 587;
-                $mail->Timeout = 10; // 10 seconds timeout
-                $mail->SMTPConnectTimeout = 10;
+            // 3. Kirim email konfirmasi
+            $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http");
+            $is_localhost = strpos($_SERVER['HTTP_HOST'], 'localhost') !== false || strpos($_SERVER['HTTP_HOST'], '127.0.0.1') !== false;
+            $path_prefix = $is_localhost ? '/KosConnect' : '';
+            $current_host = $_SERVER['HTTP_HOST'];
+            
+            $activation_link = "$protocol://$current_host$path_prefix/auth/activate.php?token=$activation_token";
 
-                // Penerima
-                $mail->setFrom('willyjuaness@gmail.com', 'KosConnect');
-                $mail->addAddress($email, $fullname); // Menggunakan email dari form registrasi
-
-                // Konten Email
-                $mail->isHTML(true); // Kirim sebagai HTML
-                $mail->Subject = "Selamat Datang di KosConnect! Aktifkan Akun Anda";
-                
-                // Dynamic Activation Link
-                $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http");
-                $is_localhost = strpos($_SERVER['HTTP_HOST'], 'localhost') !== false || strpos($_SERVER['HTTP_HOST'], '127.0.0.1') !== false;
-                $path_prefix = $is_localhost ? '/KosConnect' : '';
-                $current_host = $_SERVER['HTTP_HOST'];
-                
-                $activation_link = "$protocol://$current_host$path_prefix/auth/activate.php?token=$activation_token";
-
-                $mail->Body = "
-                    <div style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
-                        <div style='max-width: 600px; margin: 20px auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;'>
-                            <h2 style='color: #667eea; text-align: center;'>Selamat Datang di KosConnect!</h2>
-                            <p>Halo <strong>" . htmlspecialchars($fullname) . "</strong>,</p>
-                            <p>Terima kasih telah mendaftar. Hanya satu langkah lagi untuk mengaktifkan akun Anda. Silakan klik tombol di bawah ini:</p>
-                            <div style='text-align: center; margin: 30px 0;'>
-                                <a href='" . $activation_link . "' style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;'>Aktifkan Akun Saya</a>
-                            </div>
-                            <p>Jika tombol di atas tidak berfungsi, Anda juga bisa menyalin dan menempelkan tautan berikut di browser Anda:</p>
-                            <p style='word-break: break-all; font-size: 0.9em;'><a href='" . $activation_link . "'>" . $activation_link . "</a></p>
-                            <p>Jika Anda tidak merasa mendaftar di KosConnect, abaikan saja email ini.</p>
-                            <hr style='border: none; border-top: 1px solid #eee; margin: 20px 0;'>
-                            <p style='font-size: 0.9em; color: #777; text-align: center;'>&copy; " . date("Y") . " KosConnect. All rights reserved.</p>
+            $htmlBody = "
+                <div style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
+                    <div style='max-width: 600px; margin: 20px auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;'>
+                        <h2 style='color: #667eea; text-align: center;'>Selamat Datang di KosConnect!</h2>
+                        <p>Halo <strong>" . htmlspecialchars($fullname) . "</strong>,</p>
+                        <p>Terima kasih telah mendaftar. Hanya satu langkah lagi untuk mengaktifkan akun Anda. Silakan klik tombol di bawah ini:</p>
+                        <div style='text-align: center; margin: 30px 0;'>
+                            <a href='" . $activation_link . "' style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;'>Aktifkan Akun Saya</a>
                         </div>
-                    </div>";
+                        <p>Jika tombol di atas tidak berfungsi, Anda juga bisa menyalin dan menempelkan tautan berikut di browser Anda:</p>
+                        <p style='word-break: break-all; font-size: 0.9em;'><a href='" . $activation_link . "'>" . $activation_link . "</a></p>
+                        <p>Jika Anda tidak merasa mendaftar di KosConnect, abaikan saja email ini.</p>
+                        <hr style='border: none; border-top: 1px solid #eee; margin: 20px 0;'>
+                        <p style='font-size: 0.9em; color: #777; text-align: center;'>&copy; " . date("Y") . " KosConnect. All rights reserved.</p>
+                    </div>
+                </div>";
 
-                $mail->send();
-                // 4. SETEL PENANDA SESI SUKSES setelah email berhasil terkirim
+            $emailSent = false;
+            
+            // Coba kirim via Resend (Bagus untuk Production/Railway)
+            if (getenv('RESEND_API_KEY')) {
+                $emailSent = EmailService::send($email, "Selamat Datang di KosConnect! Aktifkan Akun Anda", $htmlBody, $fullname);
+            }
+
+            // Jika Resend gagal atau API Key tidak ada, coba PHPMailer (Bagus untuk Local)
+            if (!$emailSent) {
+                $mail = new PHPMailer(true);
+                try {
+                    $mail->isSMTP();
+                    $mail->Host = 'smtp.gmail.com';
+                    $mail->SMTPAuth = true;
+                    $mail->Username = 'willyjuaness@gmail.com';
+                    $mail->Password = 'dupi ihcu tylj dmvf';
+                    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+                    $mail->Port = 587;
+                    $mail->Timeout = 10;
+                    $mail->SMTPConnectTimeout = 10;
+
+                    $mail->setFrom('willyjuaness@gmail.com', 'KosConnect');
+                    $mail->addAddress($email, $fullname);
+                    $mail->isHTML(true);
+                    $mail->Subject = "Selamat Datang di KosConnect! Aktifkan Akun Anda";
+                    $mail->Body = $htmlBody;
+
+                    $mail->send();
+                    $emailSent = true;
+                } catch (Exception $e) {
+                    error_log("PHPMailer Error: " . $mail->ErrorInfo);
+                }
+            }
+
+            if ($emailSent) {
                 $_SESSION['registration_success'] = "Registrasi berhasil! Silakan periksa email Anda untuk aktivasi akun.";
-            } catch (Exception $e) {
-                // Jika email gagal, berikan pesan error yang lebih informatif
-                $error_message = "❌ Registrasi berhasil, tetapi gagal mengirim email konfirmasi. Mailer Error: {$mail->ErrorInfo}";
-                // Hapus sesi sukses jika email gagal, agar tidak ada redirect
-                unset($_SESSION['registration_success']);
+            } else {
+                $error_message = "❌ Registrasi berhasil, tetapi gagal mengirim email aktivasi. Silakan hubungi admin.";
             }
         } else {
-            $error_message = "❌ Terjadi kesalahan saat insert: " . mysqli_error($conn);
+            $error_message = "❌ Terjadi kesalahan saat pendaftaran: " . mysqli_error($conn);
         }
     }
     // Jika registrasi dan pengiriman email berhasil, redirect ke login
