@@ -5,6 +5,8 @@ ini_set('display_errors', '0');
 error_reporting(E_ALL);
 
 include '../config/db.php';
+require_once __DIR__ . '/../config/cloudinary.php';
+use Cloudinary\Api\Upload\UploadApi;
 
 // Ensure `foto_profil` column exists to prevent SQL errors when selecting/updating profile photo
 try {
@@ -30,7 +32,7 @@ function send_json($response, $code = 200) {
 
 $response = ['status' => 'error', 'message' => 'Terjadi kesalahan yang tidak diketahui.'];
 
-if (!isset($_SESSION['user_logged_in']) || !in_array($_SESSION['role'], ['penyewa', 'admin'])) {
+if (!isset($_SESSION['user_logged_in']) || !in_array($_SESSION['role'], ['penyewa', 'admin', 'pemilik'])) {
     $response['message'] = 'Akses tidak sah.';
     send_json($response, 403);
 }
@@ -174,24 +176,34 @@ if ($action === 'update_profile') {
         @unlink($upload_dir . $old_photo);
     }
 
-    // Upload new photo
-    $new_photo_name = uniqid('user_', true) . '.' . pathinfo($file['name'], PATHINFO_EXTENSION);
-    if (move_uploaded_file($file['tmp_name'], $upload_dir . $new_photo_name)) {
+    // Upload new photo to Cloudinary
+    try {
+        $uploadApi = new UploadApi();
+        $uploadResult = $uploadApi->upload($file['tmp_name'], [
+            'folder' => 'kosconnect/profiles', 
+            'public_id' => uniqid('user_'),
+            'resource_type' => 'image'
+        ]);
+        
+        $new_photo_url = $uploadResult['secure_url'];
+        
         $stmt_update = $conn->prepare("UPDATE user SET foto_profil = ? WHERE id_user = ?");
-        $stmt_update->bind_param("si", $new_photo_name, $id_user);
+        $stmt_update->bind_param("si", $new_photo_url, $id_user);
+        
         if ($stmt_update->execute()) {
-            $_SESSION['foto_profil'] = $new_photo_name;
-            $response = ['status' => 'success', 'message' => 'Foto profil berhasil diperbarui.', 'new_photo' => $new_photo_name];
+            $_SESSION['foto_profil'] = $new_photo_url;
+            $response = ['status' => 'success', 'message' => 'Foto profil berhasil diperbarui.', 'new_photo' => $new_photo_url];
             send_json($response, 200);
         } else {
             error_log('DB update failed: ' . $stmt_update->error);
-            $response['message'] = 'Gagal menyimpan nama file foto ke database.';
+            $response['message'] = 'Gagal menyimpan URL foto ke database.';
             send_json($response, 500);
         }
-    } else {
-        $last = error_get_last();
-        error_log('move_uploaded_file failed: ' . print_r($last, true));
-        $response['message'] = 'Gagal memindahkan file yang diunggah.';
+        $stmt_update->close();
+        
+    } catch (Exception $e) {
+        error_log('Cloudinary upload failed: ' . $e->getMessage());
+        $response['message'] = 'Gagal mengunggah foto ke Cloudinary: ' . $e->getMessage();
         send_json($response, 500);
     }
 

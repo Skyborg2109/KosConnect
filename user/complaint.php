@@ -348,8 +348,11 @@ $conn->close();
                             <?php endif; ?>
                         </button>
                         <button onclick="showProfileModal()" class="flex items-center space-x-2 p-2 rounded-full hover:bg-gray-100 transition">
-                            <?php if ($userPhoto): ?>
-                                <img id="headerUserPhoto" src="../uploads/profiles/<?php echo htmlspecialchars($userPhoto); ?>" alt="Foto Profil" class="w-9 h-9 rounded-full object-cover">
+                            <?php if ($userPhoto): 
+                                $isUrl = strpos($userPhoto, 'http') === 0;
+                                $photoSrc = $isUrl ? $userPhoto : "../uploads/profiles/" . htmlspecialchars($userPhoto);
+                            ?>
+                                <img id="headerUserPhoto" src="<?php echo $photoSrc; ?>" alt="Foto Profil" class="w-9 h-9 rounded-full object-cover">
                             <?php else: ?>
                                 <div id="headerUserPhoto" class="w-9 h-9 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white font-bold">
                                     <?php echo strtoupper(substr($userName, 0, 1)); ?>
@@ -529,7 +532,7 @@ $conn->close();
                 const newPhoto = localStorage.getItem('newProfilePhoto');
                 if (newPhoto) {
                     const ts = Date.now();
-                    const url = `../uploads/profiles/${newPhoto}?t=${ts}`;
+                    const url = newPhoto.startsWith('http') ? newPhoto : `../uploads/profiles/${newPhoto}?t=${ts}`;
                     const headerPhoto = document.getElementById('headerUserPhoto');
                     if (headerPhoto) {
                         if (headerPhoto.tagName === 'IMG') {

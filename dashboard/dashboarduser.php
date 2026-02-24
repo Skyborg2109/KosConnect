@@ -1,6 +1,7 @@
 <?php
 session_start();
 if (!isset($_SESSION['user_logged_in']) || !in_array($_SESSION['role'], ['penyewa', 'admin'])) {
+    $_SESSION['login_error'] = "Anda harus login terlebih dahulu untuk mengakses halaman ini.";
     header("Location: ../auth/loginForm.php");
     exit();
 }
@@ -35,35 +36,40 @@ $search = $_GET['search'] ?? '';
 $list_kost = [];
 $wishlist_kost = []; // Store wishlist items
 
-try {
-    // Coba query dengan kolom 'gambar'
-    $sql = "SELECT id_kost, nama_kost, alamat, deskripsi, fasilitas, gambar, harga FROM kost WHERE status_kos = 'tersedia'";
-    if (!empty($search)) {
-        $sql .= " AND (nama_kost LIKE ? OR alamat LIKE ?)";
-    }
-    $sql .= " ORDER BY id_kost DESC";
-    $stmt = $conn->prepare($sql);
-} catch (mysqli_sql_exception $e) {
-    // Fallback jika kolom 'gambar' tidak ada
-    $sql = "SELECT id_kost, nama_kost, alamat, deskripsi, fasilitas, harga FROM kost WHERE status_kos = 'tersedia'";
-    if (!empty($search)) {
-        $sql .= " AND (nama_kost LIKE ? OR alamat LIKE ?)";
-    }
-    $sql .= " ORDER BY id_kost DESC";
-    $stmt = $conn->prepare($sql);
-}
+// Ambil data Kos untuk ditampilkan
+$search = $_GET['search'] ?? '';
+$list_kost = [];
+$wishlist_kost = []; // Store wishlist items
+
+$sql = "SELECT k.*, 
+            (SELECT foto FROM kamar WHERE id_kost = k.id_kost AND foto IS NOT NULL AND foto != '' LIMIT 1) as room_photo,
+            k.tipe_kost, k.jenis_kamar
+            FROM kost k 
+            WHERE k.status_kos = 'tersedia'";
 
 if (!empty($search)) {
-    $searchTerm = "%" . $search . "%";
-    $stmt->bind_param("ss", $searchTerm, $searchTerm);
+    $sql .= " AND (nama_kost LIKE ? OR alamat LIKE ?)";
 }
 
-$stmt->execute();
-$result = $stmt->get_result();
-while ($row = $result->fetch_assoc()) {
-    $list_kost[] = $row;
+$sql .= " ORDER BY k.created_at DESC";
+
+$stmt = $conn->prepare($sql);
+if (!$stmt) {
+    error_log("SQL Prepare Error: " . $conn->error);
+    $list_kost = []; // Return empty list
+} else {
+    if (!empty($search)) {
+        $searchTerm = "%" . $search . "%";
+        $stmt->bind_param("ss", $searchTerm, $searchTerm);
+    }
+    
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $list_kost = $result->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
 }
-$stmt->close();
+// Skip the original execution since we included it in the else block
+// Logic moved above safely
 
 // Ambil wishlist user
 try {
@@ -195,7 +201,9 @@ $conn->close();
         
         /* Hero Background */
         .hero-bg {
-            background-image: linear-gradient(135deg, rgba(147, 51, 234, 0.8) 0%, rgba(79, 70, 229, 0.8) 100%), url('../img/kost4.png');
+            background-image: 
+                linear-gradient(135deg, rgba(76, 29, 149, 0.9) 0%, rgba(30, 64, 175, 0.85) 100%),
+                url('../img/kost4.png');
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
@@ -209,7 +217,22 @@ $conn->close();
             left: 0;
             right: 0;
             bottom: 0;
-            background: radial-gradient(circle at top right, rgba(255,255,255,0.1) 0%, transparent 60%);
+            background: 
+                radial-gradient(circle at top right, rgba(255,255,255,0.1) 0%, transparent 60%),
+                radial-gradient(circle at bottom left, rgba(255,255,255,0.05) 0%, transparent 60%);
+            z-index: 1;
+        }
+
+        /* Overlay Pattern */
+        .hero-bg::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            z-index: 1;
         }
         
         /* Navigation */
@@ -405,13 +428,35 @@ $conn->close();
                             <?php endif; ?>
                         </button>
                         <button onclick="showProfileModal()" class="user-info-box">
-                            <?php if ($userPhoto): ?>
-                                <img id="headerUserPhoto" src="../uploads/profiles/<?php echo htmlspecialchars($userPhoto); ?>" alt="Foto Profil" class="w-9 h-9 rounded-full object-cover ring-2 ring-purple-200">
-                            <?php else: ?>
+                            <?php 
+                            $userPhoto = trim($userPhoto ?? '');
+                            $displayPhoto = false;
+                            $profilePhotoUrl = '';
+
+                            // DEBUG: Print photo path
+                            // echo "<!-- Photo: " . htmlspecialchars($userPhoto) . " -->";
+                            // echo "<!-- Path: " . __DIR__ . '/../uploads/profiles/' . $userPhoto . " -->";
+
+                            if (!empty($userPhoto)) {
+                                if (strpos($userPhoto, 'http') === 0) {
+                                    $profilePhotoUrl = $userPhoto;
+                                    $displayPhoto = true;
+                                } else {
+                                    // Always use relative URL for uploaded files
+                                    // Optimistic approach for hosting environments
+                                    $profilePhotoUrl = '../uploads/profiles/' . $userPhoto;
+                                    $displayPhoto = true;
+                                }
+                            }
+                            
+                            if ($displayPhoto) {
+                            ?>
+                                <img id="headerUserPhoto" src="<?php echo htmlspecialchars($profilePhotoUrl); ?>" alt="Foto Profil" class="w-9 h-9 rounded-full object-cover ring-2 ring-purple-200" onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name=<?php echo urlencode($userName); ?>&background=random';">
+                            <?php } else { ?>
                                 <div id="headerUserPhoto" class="w-9 h-9 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white font-bold shadow-md">
                                     <?php echo strtoupper(substr($userName, 0, 1)); ?>
                                 </div>
-                            <?php endif; ?>
+                            <?php } ?>
                             <div class="text-sm text-gray-800 ml-3">
                                 <span class="block font-semibold"><?php echo $userName; ?></span>
                                 <span class="block text-xs text-gray-500"><?php echo htmlspecialchars(ucfirst($userRole)); ?></span>
@@ -538,6 +583,13 @@ $conn->close();
             <!-- Decorative elements -->
             <div class="absolute top-20 left-10 w-20 h-20 bg-white bg-opacity-10 rounded-full blur-xl"></div>
             <div class="absolute bottom-20 right-10 w-32 h-32 bg-purple-300 bg-opacity-20 rounded-full blur-2xl"></div>
+            
+            <!-- Wave Divider -->
+            <div class="absolute bottom-0 left-0 right-0 z-20 overflow-hidden leading-none">
+                <svg data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 120" preserveAspectRatio="none" class="relative block w-[calc(100%+1.3px)] h-[60px] sm:h-[100px]" style="transform: rotate(180deg);">
+                    <path d="M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,26.09,214.34,3V0H0V27.35A600.21,600.21,0,0,0,321.39,56.44Z" fill="#ffffff" fill-opacity="1"></path>
+                </svg>
+            </div>
         </section>
 
         <!-- How It Works Section -->
@@ -623,20 +675,65 @@ $conn->close();
                         <div class="bg-white rounded-xl sm:rounded-2xl shadow-md lg:shadow-lg overflow-hidden card-hover flex flex-col border border-gray-100 hover:shadow-lg transition-all duration-300" style="animation: slideUp <?php echo 0.2 + ($index * 0.1); ?>s ease-out;">
                             <div class="h-40 sm:h-48 lg:h-56 w-full relative overflow-hidden group">
                                 <?php 
-                                    // Alternating images for visual variety
-                                    $cardImage = ($index % 2 == 0) ? 'kost4.jpg' : 'kost5.jpg';
+                                    $gambar = !empty($kost['gambar']) ? $kost['gambar'] : ($kost['room_foto'] ?? '');
+                                    $is_url = strpos($gambar, 'http') === 0;
+                                    $is_room = (!empty($kost['room_foto']) && $gambar === $kost['room_foto'] && empty($kost['gambar']));
+                                    $folder = $is_room ? '../uploads/rooms/' : '../uploads/kost/';
+                                    $img_src = $is_url ? $gambar : $folder . $gambar;
+                                    
+                                    if (!empty($gambar) && ($is_url || file_exists(__DIR__ . '/../' . ltrim($folder, '../') . $gambar))) {
+                                        $imageSrc = $img_src;
+                                    } else {
+                                        $imageSrc = '../img/' . (($index % 2 == 0) ? 'kost4.jpg' : 'kost5.jpg');
+                                    }
                                 ?>
-                                <img src="../img/<?php echo $cardImage; ?>" alt="<?php echo htmlspecialchars($kost['nama_kost']); ?>" class="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500">
-                                <div class="absolute top-2 sm:top-3 lg:top-4 right-2 sm:right-3 lg:right-4 flex gap-1 sm:gap-2">
-                                    <button onclick="toggleWishlist(<?php echo $kost['id_kost']; ?>, this)" class="wishlist-btn bg-white text-red-500 p-1.5 sm:p-2 rounded-full shadow-lg hover:bg-red-50 transition-all duration-300 <?php echo in_array($kost['id_kost'], $wishlist_kost) ? 'favorited' : ''; ?>" title="Tambah ke Favorit">
-                                        <i class="fas fa-heart text-sm sm:text-base" style="font-size: 1em;"></i>
-                                    </button>
-                                    <span class="bg-purple-600 text-white px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs font-semibold shadow-lg flex items-center text-xxs sm:text-xs">
-                                        <i class="fas fa-check-circle mr-0.5 sm:mr-1"></i>Tersedia
+                                <img src="<?php echo htmlspecialchars($imageSrc); ?>" alt="<?php echo htmlspecialchars($kost['nama_kost']); ?>" class="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500">
+                                <?php if ($is_room): ?>
+                                    <div class="absolute bottom-2 right-14 z-10 bg-blue-600/80 backdrop-blur-md text-white text-[10px] px-2 py-1 rounded-md font-medium">
+                                        <i class="fas fa-bed mr-1"></i>Foto Kamar
+                                    </div>
+                                <?php endif; ?>
+                                <!-- Availability badge only on image (top-right) -->
+                                <div class="absolute top-3 right-3 z-10">
+                                    <span class="bg-green-500/90 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-bold shadow-md flex items-center gap-1.5">
+                                        <i class="fas fa-check-circle text-white text-xs"></i> Tersedia
                                     </span>
+                                </div>
+                                <!-- Wishlist button -->
+                                <div class="absolute top-3 left-3 z-10">
+                                    <button onclick="toggleWishlist(<?php echo $kost['id_kost']; ?>, this)" class="wishlist-btn w-9 h-9 flex items-center justify-center bg-white/80 backdrop-blur-md rounded-full shadow-sm hover:bg-white hover:shadow-md transition-all duration-300 group <?php echo in_array($kost['id_kost'], $wishlist_kost) ? 'favorited text-red-500' : 'text-gray-400 hover:text-red-500'; ?>" title="Tambah ke Favorit">
+                                        <i class="fas fa-heart text-sm transition-transform group-hover:scale-110"></i>
+                                    </button>
                                 </div>
                             </div>
                             <div class="p-3 sm:p-4 lg:p-6 flex-grow flex flex-col">
+                                <!-- Status badges moved outside image -->
+                                <div class="flex items-center gap-2 mb-2 flex-wrap">
+                                    <?php 
+                                        $tipe = $kost['tipe_kost'] ?? 'Campuran';
+                                        $tipe_bg = 'bg-gray-100';
+                                        $tipe_text = 'text-gray-700';
+                                        $tipe_icon = '🚻';
+                                        if ($tipe === 'Putra') {
+                                            $tipe_bg = 'bg-blue-50';
+                                            $tipe_text = 'text-blue-700';
+                                            $tipe_icon = '🚹';
+                                        } elseif ($tipe === 'Putri') {
+                                            $tipe_bg = 'bg-pink-50';
+                                            $tipe_text = 'text-pink-700';
+                                            $tipe_icon = '🚺';
+                                        }
+                                    ?>
+                                    <span class="<?php echo $tipe_bg; ?> <?php echo $tipe_text; ?> px-3 py-1 rounded-full text-xs font-bold border border-current border-opacity-20">
+                                        <?php echo $tipe_icon . ' ' . $tipe; ?>
+                                    </span>
+                                    <?php if (!empty($kost['jenis_kamar'])): ?>
+                                        <span class="bg-purple-50 text-purple-700 px-3 py-1 rounded-full text-xs font-bold border border-purple-200">
+                                            🛏️ <?php echo htmlspecialchars($kost['jenis_kamar']); ?>
+                                        </span>
+                                    <?php endif; ?>
+                                </div>
+                                
                                 <h3 class="text-base sm:text-lg lg:text-xl font-bold text-gray-900 mb-1 sm:mb-2 hover:text-purple-600 transition-colors truncate"><?php echo htmlspecialchars($kost['nama_kost']); ?></h3>
                                 <p class="text-gray-500 text-xs sm:text-sm flex items-center mb-2 sm:mb-3 truncate">
                                     <i class="fas fa-map-marker-alt mr-1 sm:mr-2 text-purple-500 flex-shrink-0"></i>
@@ -806,7 +903,12 @@ $conn->close();
                 const newPhoto = localStorage.getItem('newProfilePhoto');
                 if (newPhoto) {
                     const ts = Date.now();
-                    const url = `../uploads/profiles/${newPhoto}?t=${ts}`;
+                    let url;
+                    if (newPhoto.startsWith('http')) {
+                        url = newPhoto;
+                    } else {
+                        url = `../uploads/profiles/${newPhoto}?t=${ts}`;
+                    }
                     
                     // Update foto di header
                     const headerPhoto = document.getElementById('headerUserPhoto');
@@ -881,12 +983,22 @@ $conn->close();
                             // Perbaiki path link - jika sudah mengandung 'user/' atau 'dashboard/', langsung gunakan
                             let link = '#';
                             if (notif.link) {
+                                let cleanLink = notif.link;
+                                // Sanitize: Remove /KosConnect/ prefix if present to avoid double path or 404 on virtual host
+                                if (cleanLink.startsWith('/KosConnect/')) {
+                                    cleanLink = cleanLink.replace('/KosConnect/', '');
+                                }
+                                // Remove leading slash if present to ensure reliable relative path with ../
+                                if (cleanLink.startsWith('/')) {
+                                    cleanLink = cleanLink.substring(1);
+                                }
+
                                 // Jika link sudah lengkap dengan folder, gunakan langsung
-                                if (notif.link.includes('/')) {
-                                    link = `../${notif.link}`;
+                                if (cleanLink.includes('/')) {
+                                    link = `../${cleanLink}`;
                                 } else {
                                     // Jika hanya nama file, asumsikan di folder user
-                                    link = `../user/${notif.link}`;
+                                    link = `../user/${cleanLink}`;
                                 }
                             }
                             
@@ -1085,6 +1197,90 @@ $conn->close();
                     mobileMenuActive = false;
                 }, 300);
             }
+        }
+
+        // Fungsi untuk menampilkan notifikasi (User/Penyewa)
+        function showNotifications() {
+            // Optimistic UI update: Sembunyikan badge segera
+            const badge = document.getElementById('notifBadge');
+            if (badge) {
+                badge.style.animation = 'fadeOut 0.3s ease';
+                setTimeout(() => badge.remove(), 300);
+            }
+            // Juga sembunyikan badge mobile jika ada (id mungkin sama, tapi jika ID unik harusnya cuma satu yang kena)
+            // Karena ID harus unik, pastikan jika ada elemen lain dengan ID sama (tidak valid HTML), kita tangani semua.
+            // Di kode user ada badge di desktop dan mobile dengan ID sama 'notifBadge'. Ini invalid HTML tapi browser usually handle first match.
+            // Kita coba querySelectorAll untuk aman.
+            document.querySelectorAll('#notifBadge').forEach(el => {
+                 el.style.animation = 'fadeOut 0.3s ease';
+                 setTimeout(() => el.remove(), 300);
+            });
+
+
+            fetch('../user/get_notifications.php')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success' && data.notifications.length > 0) {
+                        let notifHtml = '<div class="space-y-3 text-left max-h-96 overflow-y-auto pr-2">';
+                        data.notifications.forEach(notif => {
+                            const readClass = notif.is_read == 1 ? 'opacity-60' : 'font-semibold border-l-4 border-blue-500';
+                            const icon = notif.is_read == 1 ? 'fa-envelope-open' : 'fa-envelope';
+                            notifHtml += `
+                                <div class="p-4 border rounded-xl hover:bg-gray-50 ${readClass} transition-all duration-300 hover:shadow-md">
+                                    <div class="flex items-start space-x-3">
+                                        <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                            <i class="fas ${icon} text-blue-600"></i>
+                                        </div>
+                                        <div class="flex-grow">
+                                            <p class="text-sm text-gray-800">${notif.pesan}</p>
+                                            <div class="flex justify-between items-center mt-2">
+                                                <span class="text-xs text-gray-400">
+                                                    <i class="far fa-clock mr-1"></i>${notif.created_at}
+                                                </span>
+                                                ${(() => {
+                                                    if (!notif.link) return '';
+                                                    let cleanLink = notif.link;
+                                                    // Sanitize link for virtual host
+                                                    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                                                        if (cleanLink.startsWith('/KosConnect/')) {
+                                                            cleanLink = cleanLink.replace('/KosConnect/', '/');
+                                                        }
+                                                    }
+                                                    return `<a href="${cleanLink}" class="text-xs text-blue-600 hover:text-blue-700 font-medium hover:underline">Lihat Detail →</a>`;
+                                                })()}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>`;
+                        });
+                        notifHtml += '</div>';
+
+                        Swal.fire({
+                            title: '<strong class="text-2xl">📬 Notifikasi Anda</strong>',
+                            html: notifHtml,
+                            width: '600px',
+                            showConfirmButton: true,
+                            confirmButtonText: '<i class="fas fa-check-double mr-2"></i>Tandai Semua Sudah Dibaca',
+                            confirmButtonColor: '#475569',
+                            customClass: {
+                                popup: 'rounded-2xl',
+                                confirmButton: 'rounded-lg px-6 py-3'
+                            }
+                        }).then(() => {
+                            fetch('../user/get_notifications.php', { method: 'POST' });
+                        });
+                    } else {
+                        Swal.fire({
+                            title: 'Notifikasi',
+                            html: '<div class="text-center py-4"><i class="fas fa-inbox text-gray-300 text-5xl mb-4"></i><p class="text-gray-600">Tidak ada notifikasi baru.</p></div>',
+                            icon: 'info',
+                            confirmButtonColor: '#475569',
+                            customClass: {
+                                popup: 'rounded-2xl'
+                            }
+                        });
+                    }
+                });
         }
 
         // --- WISHLIST FUNCTIONS ---

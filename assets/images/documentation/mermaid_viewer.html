@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KosConnect - Mermaid Diagram Viewer</title>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 { color: #333; text-align: center; }
+        h2 { color: #555; margin-top: 40px; border-bottom: 2px solid #ddd; padding-bottom: 10px; }
+        .diagram-container {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+        .instructions {
+            background: #e3f2fd;
+            padding: 15px;
+            border-left: 4px solid #2196f3;
+            margin-bottom: 20px;
+        }
+        button {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover { background: #1976d2; }
+    </style>
+</head>
+<body>
+    <h1>📊 KosConnect - Diagram Alur Sistem</h1>
+    
+    <div class="instructions">
+        <strong>Cara Menggunakan:</strong>
+        <ol>
+            <li>Buka file ini di browser (Chrome/Firefox/Edge)</li>
+            <li>Klik kanan pada diagram → "Save image as..." untuk menyimpan sebagai PNG</li>
+            <li>Atau gunakan screenshot tool untuk capture diagram</li>
+        </ol>
+    </div>
+
+    <h2>A. Alur Proses Booking Kamar</h2>
+    <div class="diagram-container">
+        <pre class="mermaid">
+flowchart TD
+    Start([User Membuka Website]) --> Login{Sudah Login?}
+    Login -->|Belum| Register[Register/Login]
+    Register --> Search
+    Login -->|Sudah| Search[Cari Kost]
+    Search --> Filter[Filter berdasarkan Lokasi/Harga]
+    Filter --> ViewList[Lihat Daftar Kost]
+    ViewList --> SelectKost[Pilih Kost]
+    SelectKost --> ViewDetail[Lihat Detail & Foto]
+    ViewDetail --> CheckRoom{Kamar Tersedia?}
+    CheckRoom -->|Tidak| ViewList
+    CheckRoom -->|Ya| BookRoom[Booking Kamar]
+    BookRoom --> WaitApproval[Menunggu Persetujuan Pemilik]
+    WaitApproval --> OwnerCheck{Pemilik Setuju?}
+    OwnerCheck -->|Ditolak| NotifReject[Notifikasi Ditolak]
+    NotifReject --> End1([Selesai])
+    OwnerCheck -->|Disetujui| Payment[Halaman Pembayaran]
+    Payment --> ChooseMethod{Pilih Metode}
+    ChooseMethod -->|Manual| UploadProof[Upload Bukti Transfer]
+    ChooseMethod -->|Gateway| PaymentGateway[Midtrans/Xendit]
+    UploadProof --> OwnerVerify[Pemilik Verifikasi]
+    PaymentGateway --> AutoVerify[Verifikasi Otomatis]
+    OwnerVerify --> Success[Status: Dibayar]
+    AutoVerify --> Success
+    Success --> NotifSuccess[Notifikasi Berhasil]
+    NotifSuccess --> End2([Booking Selesai])
+        </pre>
+    </div>
+
+    <h2>B. Alur Sistem Pembayaran</h2>
+    <div class="diagram-container">
+        <pre class="mermaid">
+flowchart TD
+    Start([Booking Disetujui]) --> ChoosePayment{Pilih Gateway}
+    ChoosePayment -->|Manual Transfer| Manual[Upload Bukti Pembayaran]
+    ChoosePayment -->|Midtrans| Midtrans[Redirect ke Midtrans]
+    ChoosePayment -->|Xendit| Xendit[Redirect ke Xendit]
+    
+    Manual --> SaveProof[Simpan ke Database]
+    SaveProof --> NotifOwner[Notifikasi ke Pemilik]
+    NotifOwner --> OwnerCheck{Pemilik Verifikasi}
+    OwnerCheck -->|Ditolak| Reject[Status: Gagal]
+    OwnerCheck -->|Disetujui| Approve[Status: Berhasil]
+    
+    Midtrans --> MidtransPayment[User Bayar via Midtrans]
+    MidtransPayment --> MidtransCallback[Webhook Callback]
+    MidtransCallback --> UpdateDB1[Update Database]
+    
+    Xendit --> XenditPayment[User Bayar via Xendit]
+    XenditPayment --> XenditCallback[Webhook Callback]
+    XenditCallback --> UpdateDB2[Update Database]
+    
+    UpdateDB1 --> AutoApprove[Status: Berhasil Otomatis]
+    UpdateDB2 --> AutoApprove
+    Approve --> UpdateRoom[Update Status Kamar]
+    AutoApprove --> UpdateRoom
+    UpdateRoom --> SendNotif[Kirim Notifikasi User]
+    SendNotif --> End([Pembayaran Selesai])
+    Reject --> End
+        </pre>
+    </div>
+
+    <h2>C. Arsitektur Sistem</h2>
+    <div class="diagram-container">
+        <pre class="mermaid">
+flowchart LR
+    User([User/Penyewa]) --> WebApp[Web Application]
+    Owner([Pemilik Kos]) --> WebApp
+    Admin([Administrator]) --> WebApp
+    
+    WebApp --> Auth[Authentication System]
+    WebApp --> Search[Search Engine]
+    WebApp --> Booking[Booking Module]
+    WebApp --> Payment[Payment Module]
+    
+    Auth --> DB[(MySQL Database)]
+    Search --> DB
+    Booking --> DB
+    Payment --> DB
+    
+    Payment --> Midtrans[Midtrans API]
+    Payment --> Xendit[Xendit API]
+    
+    Midtrans --> Webhook1[Webhook Handler]
+    Xendit --> Webhook2[Webhook Handler]
+    Webhook1 --> DB
+    Webhook2 --> DB
+    
+    DB --> Notif[Notification System]
+    Notif --> User
+    Notif --> Owner
+    Notif --> Admin
+        </pre>
+    </div>
+
+    <div class="instructions" style="margin-top: 40px; background: #fff3cd; border-left-color: #ffc107;">
+        <strong>💡 Tips:</strong>
+        <ul>
+            <li>Untuk kualitas terbaik, gunakan browser Chrome atau Edge</li>
+            <li>Simpan diagram dengan resolusi tinggi untuk laporan</li>
+            <li>Anda juga bisa menggunakan <a href="https://mermaid.live" target="_blank">mermaid.live</a> untuk edit online</li>
+        </ul>
+    </div>
+</body>
+</html>

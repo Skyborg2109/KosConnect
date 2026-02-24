@@ -50,7 +50,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $mail->isHTML(true); // Kirim sebagai HTML
             $mail->Subject = "Aktivasi Akun KosConnect - Link Baru";
-            $activation_link = "http://localhost/KosConnect/auth/activate.php?token=$activation_token";
+            
+            // Dynamic Activation Link
+            $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http");
+            $is_localhost = strpos($_SERVER['HTTP_HOST'], 'localhost') !== false || strpos($_SERVER['HTTP_HOST'], '127.0.0.1') !== false;
+            $path_prefix = $is_localhost ? '/KosConnect' : '';
+            $current_host = $_SERVER['HTTP_HOST'];
+            
+            $activation_link = "$protocol://$current_host$path_prefix/auth/activate.php?token=$activation_token";
 
             $mail->Body = "
                 <div style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>

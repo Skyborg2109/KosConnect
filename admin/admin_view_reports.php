@@ -21,9 +21,12 @@ function getReportData($conn, $period = '6', $type = 'booking') {
                 SUM(CASE WHEN status IN ('dibayar', 'selesai') THEN 1 ELSE 0 END) AS booking_sukses,
                 ROUND((SUM(CASE WHEN status IN ('dibayar', 'selesai') THEN 1 ELSE 0 END) / COUNT(id_booking)) * 100, 1) AS persentase_sukses
             FROM booking
-            GROUP BY bulan
+                GROUP BY bulan
             ORDER BY bulan DESC LIMIT ?";
         $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            throw new Exception("SQL Prepare Error (Booking): " . $conn->error);
+        }
         $stmt->bind_param('i', $limit);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -37,12 +40,15 @@ function getReportData($conn, $period = '6', $type = 'booking') {
                 DATE_FORMAT(tanggal_pembayaran, '%Y-%m') AS bulan,
                 COUNT(id_payment) AS total_pembayaran,
                 SUM(jumlah) AS total_jumlah,
-                SUM(CASE WHEN status_pembayaran = 'dikonfirmasi' THEN 1 ELSE 0 END) AS pembayaran_sukses,
-                ROUND((SUM(CASE WHEN status_pembayaran = 'dikonfirmasi' THEN 1 ELSE 0 END) / COUNT(id_payment)) * 100, 1) AS persentase_sukses
+                SUM(CASE WHEN status_pembayaran IN ('berhasil', 'lunas', 'disetujui', 'sukses', 'paid') THEN 1 ELSE 0 END) AS pembayaran_sukses,
+                ROUND((SUM(CASE WHEN status_pembayaran IN ('berhasil', 'lunas', 'disetujui', 'sukses', 'paid') THEN 1 ELSE 0 END) / COUNT(id_payment)) * 100, 1) AS persentase_sukses
             FROM pembayaran
             GROUP BY bulan
             ORDER BY bulan DESC LIMIT ?";
         $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            throw new Exception("SQL Prepare Error (Payment): " . $conn->error);
+        }
         $stmt->bind_param('i', $limit);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -53,7 +59,7 @@ function getReportData($conn, $period = '6', $type = 'booking') {
         // Registrasi user per bulan
         $sql = "
             SELECT
-                DATE_FORMAT(tanggal_daftar, '%Y-%m') AS bulan,
+                DATE_FORMAT(created_at, '%Y-%m') AS bulan,
                 COUNT(id_user) AS total_user_baru,
                 SUM(CASE WHEN role = 'penyewa' THEN 1 ELSE 0 END) AS penyewa_baru,
                 SUM(CASE WHEN role = 'pemilik' THEN 1 ELSE 0 END) AS pemilik_baru
@@ -61,6 +67,9 @@ function getReportData($conn, $period = '6', $type = 'booking') {
             GROUP BY bulan
             ORDER BY bulan DESC LIMIT ?";
         $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            throw new Exception("SQL Prepare Error (User): " . $conn->error);
+        }
         $stmt->bind_param('i', $limit);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -74,12 +83,23 @@ function getReportData($conn, $period = '6', $type = 'booking') {
 
 // Handle AJAX request untuk data laporan
 if (isset($_GET['ajax'])) {
-    $period = $_GET['period'] ?? '6';
-    $type = $_GET['type'] ?? 'booking';
-    $data = getReportData($conn, $period, $type);
-
+    // Prevent HTML errors from breaking JSON
+    ini_set('display_errors', 0);
+    error_reporting(E_ALL);
+    
     header('Content-Type: application/json');
-    echo json_encode($data);
+    
+    try {
+        $period = $_GET['period'] ?? '6';
+        $type = $_GET['type'] ?? 'booking';
+        
+        $data = getReportData($conn, $period, $type);
+        
+        echo json_encode($data);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['error' => $e->getMessage()]);
+    }
     exit();
 }
 
@@ -248,7 +268,7 @@ $currentPeriod = '6';
                 </div>
                 <div>
                     <button id="exportBtn" class="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 px-4 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all font-semibold shadow-md hover:shadow-lg flex items-center justify-center">
-                        <i class="fas fa-download mr-2"></i>Export CSV
+                        <i class="fas fa-print mr-2"></i>Cetak Laporan
                     </button>
                 </div>
             </div>
@@ -302,7 +322,7 @@ $currentPeriod = '6';
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
+        (function() {
             const filterBtn = document.getElementById('filterBtn');
             const exportBtn = document.getElementById('exportBtn');
             const periodSelect = document.getElementById('periodSelect');
@@ -312,11 +332,18 @@ $currentPeriod = '6';
             const tableHead = document.getElementById('tableHead');
             const tableBody = document.getElementById('tableBody');
 
+            if (!filterBtn || !exportBtn) {
+                console.error('Report elements not found');
+                return;
+            }
+
             // Fungsi untuk update laporan
             function updateReport() {
                 const period = periodSelect.value;
                 const type = typeSelect.value;
-
+                
+                // ... logic remains same ...
+                
                 // Update judul
                 const typeLabels = {
                     'booking': 'Booking',
@@ -343,12 +370,18 @@ $currentPeriod = '6';
                 filterBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Memproses...';
 
                 // Fetch data via AJAX
+                // Fetch data via AJAX
                 fetch(`../admin/admin_view_reports.php?ajax=1&period=${period}&type=${type}`)
-                    .then(response => {
+                    .then(async response => {
+                        const isJson = response.headers.get('content-type')?.includes('application/json');
+                        const data = isJson ? await response.json() : null;
+
                         if (!response.ok) {
-                            throw new Error(`HTTP error! status: ${response.status}`);
+                            const error = (data && data.error) || response.statusText;
+                            throw new Error(error);
                         }
-                        return response.json();
+                        
+                        return data;
                     })
                     .then(data => {
                         updateTable(data, type);
@@ -472,35 +505,49 @@ $currentPeriod = '6';
                 e.preventDefault();
                 e.stopPropagation();
                 
-                const period = periodSelect.value;
-                const type = typeSelect.value;
-                
-                // Show loading state
-                const originalBtnHtml = exportBtn.innerHTML;
-                exportBtn.disabled = true;
-                exportBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Mengunduh...';
-                
-                // Create hidden link for download
-                const downloadLink = document.createElement('a');
-                downloadLink.href = `../admin/admin_view_reports.php?export=1&period=${period}&type=${type}`;
-                downloadLink.target = '_blank';
-                downloadLink.style.display = 'none';
-                
-                // Append and trigger click
-                document.body.appendChild(downloadLink);
-                downloadLink.click();
-                
-                // Cleanup
-                setTimeout(() => {
-                    document.body.removeChild(downloadLink);
-                    exportBtn.disabled = false;
-                    exportBtn.innerHTML = originalBtnHtml;
-                }, 1500);
+                // Print logic
+                const printWindow = window.open('', '_blank');
+                const reportContent = document.getElementById('reportTable').outerHTML;
+                const title = reportTitle.textContent;
+                const subtitle = reportSubtitle.textContent;
+
+                printWindow.document.write(`
+                    <html>
+                    <head>
+                        <title>${title}</title>
+                        <script src="https://cdn.tailwindcss.com"><\/script>
+                        <style>
+                            @media print {
+                                body { -webkit-print-color-adjust: exact; }
+                            }
+                            body { font-family: 'Segoe UI', sans-serif; padding: 20px; }
+                            h1 { font-size: 24px; font-weight: bold; text-align: center; margin-bottom: 5px; }
+                            p { text-align: center; color: #666; margin-bottom: 20px; }
+                            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                            th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+                            th { background-color: #f3f4f6 !important; color: #1f2937; }
+                            tr:nth-child(even) { background-color: #f9fafb; }
+                        </style>
+                    </head>
+                    <body>
+                        <h1>${title}</h1>
+                        <p>${subtitle}</p>
+                        <p style="text-align: right; font-size: 12px; margin-bottom: 5px;">Dicetak pada: ${new Date().toLocaleString('id-ID')}</p>
+                        ${reportContent}
+                        <script>
+                            setTimeout(() => {
+                                window.print();
+                                window.close();
+                            }, 500);
+                        <\/script>
+                    </body>
+                    </html>
+                `);
+                printWindow.document.close();
             });
 
-            // Trigger update on page load if needed
-            window.triggerReportUpdate = updateReport;
-        });
+            // Trigger initial update or validation if needed
+        })();
     </script>
 </body>
 </html>

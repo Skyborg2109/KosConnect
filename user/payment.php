@@ -626,8 +626,11 @@ $conn->close();
                             <?php endif; ?>
                         </button>
                         <button onclick="showProfileModal()" class="flex items-center space-x-2 p-2 rounded-full hover:bg-gray-100 transition">
-                            <?php if ($userPhoto): ?>
-                                <img id="headerUserPhoto" src="../uploads/profiles/<?php echo htmlspecialchars($userPhoto); ?>" alt="Foto Profil" class="w-9 h-9 rounded-full object-cover">
+                            <?php if ($userPhoto): 
+                                $isUrl = strpos($userPhoto, 'http') === 0;
+                                $photoSrc = $isUrl ? $userPhoto : "../uploads/profiles/" . htmlspecialchars($userPhoto);
+                            ?>
+                                <img id="headerUserPhoto" src="<?php echo $photoSrc; ?>" alt="Foto Profil" class="w-9 h-9 rounded-full object-cover">
                             <?php else: ?>
                                 <div id="headerUserPhoto" class="w-9 h-9 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white font-bold">
                                     <?php echo strtoupper(substr($userName, 0, 1)); ?>
@@ -942,6 +945,69 @@ $conn->close();
                                 <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>
                                 Setelah transfer/pembayaran, unggah bukti pembayaran pada form di bawah ini.
                             </p>
+                        </div>
+                    </div>
+
+                    <!-- XENDIT PAYMENT GATEWAY SECTION -->
+                    <div class="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl p-6 mb-8">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center">
+                                <div class="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center mr-3">
+                                    <i class="fas fa-bolt text-white text-xl"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-green-800 text-lg">Bayar dengan Payment Gateway</h3>
+                                    <p class="text-sm text-green-600">Otomatis & Instan - Powered by Xendit</p>
+                                </div>
+                            </div>
+                            <span class="bg-green-500 text-white text-xs font-bold px-3 py-1 rounded-full">RECOMMENDED</span>
+                        </div>
+                        
+                        <div class="bg-white rounded-lg p-4 mb-4">
+                            <p class="text-gray-700 mb-3"><i class="fas fa-check-circle text-green-500 mr-2"></i>Metode pembayaran tersedia:</p>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                                <div class="flex items-center text-gray-600">
+                                    <i class="fas fa-university text-blue-500 mr-2"></i>Virtual Account
+                                </div>
+                                <div class="flex items-center text-gray-600">
+                                    <i class="fas fa-mobile-alt text-purple-500 mr-2"></i>E-Wallet
+                                </div>
+                                <div class="flex items-center text-gray-600">
+                                    <i class="fas fa-store text-orange-500 mr-2"></i>Retail Outlets
+                                </div>
+                                <div class="flex items-center text-gray-600">
+                                    <i class="fas fa-credit-card text-red-500 mr-2"></i>Kartu Kredit
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-green-50 rounded-lg p-3 mb-4">
+                            <p class="text-sm text-green-700 flex items-start">
+                                <i class="fas fa-info-circle text-green-500 mr-2 mt-1"></i>
+                                <span>Pembayaran akan diproses otomatis dan booking Anda langsung dikonfirmasi setelah pembayaran berhasil. Tidak perlu menunggu verifikasi manual!</span>
+                            </p>
+                        </div>
+                        
+                        <button type="button" onclick="payWithXendit()" class="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-4 px-6 rounded-xl font-bold text-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1">
+                            <i class="fas fa-bolt mr-2"></i>Bayar Sekarang dengan Xendit
+                        </button>
+                    </div>
+
+                    <!-- DIVIDER -->
+                    <div class="flex items-center my-8">
+                        <div class="flex-1 border-t-2 border-gray-300"></div>
+                        <span class="px-4 text-gray-500 font-semibold">ATAU</span>
+                        <div class="flex-1 border-t-2 border-gray-300"></div>
+                    </div>
+
+                    <!-- MANUAL PAYMENT SECTION HEADER -->
+                    <div class="bg-gray-50 border-2 border-gray-200 rounded-xl p-4 mb-6">
+                        <div class="flex items-center">
+                            <i class="fas fa-upload text-gray-600 text-xl mr-3"></i>
+                            <div>
+                                <h3 class="font-bold text-gray-800">Upload Bukti Pembayaran Manual</h3>
+                                <p class="text-sm text-gray-600">Transfer manual dan upload bukti (perlu verifikasi admin)</p>
+                            </div>
                         </div>
                     </div>
 
@@ -1433,6 +1499,27 @@ $conn->close();
                 }
             }
         });
+    </script>
+
+    <!-- Xendit Payment Integration -->
+    <script src="../Js/xendit-payment.js"></script>
+    <script>
+        // Xendit Payment Function
+        function payWithXendit() {
+            const bookingId = <?php echo $id_booking; ?>;
+            const amount = <?php echo $booking_details['harga']; ?>;
+            
+            // Use the XenditPayment class
+            if (window.xenditPayment) {
+                window.xenditPayment.processPayment(bookingId, amount, 'Xendit Payment Gateway');
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Xendit payment module tidak ditemukan. Silakan refresh halaman.',
+                });
+            }
+        }
     </script>
 </body>
 </html>

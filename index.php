@@ -1,4 +1,6 @@
 <?php
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 session_start();
 include 'config/db.php';
 
@@ -19,12 +21,17 @@ if (isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'] === true) 
 // Ambil data kos dari database
 $kost_list = [];
 try {
-    $sql = "SELECT id_kost, nama_kost, alamat, deskripsi, harga, fasilitas FROM kost WHERE status_kos = 'tersedia' LIMIT 6";
+    $sql = "SELECT k.*, 
+        (SELECT foto FROM kamar WHERE id_kost = k.id_kost AND foto IS NOT NULL AND foto != '' LIMIT 1) as room_photo,
+        k.tipe_kost, k.jenis_kamar
+        FROM kost k 
+        WHERE k.status_kos = 'tersedia' 
+        ORDER BY k.created_at DESC";
     $result = $conn->query($sql);
     while ($row = $result->fetch_assoc()) {
         $kost_list[] = $row;
     }
-} catch (Exception $e) {
+} catch (Throwable $e) {
     // Jika error, gunakan data kosong
     $kost_list = [];
 }
@@ -38,7 +45,7 @@ try {
     <title>KosConnect - Platform Pencarian dan Manajemen Kos</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="css/landing.css?v=1.0">
+    <link rel="stylesheet" href="css/landing.css?v=1.2">
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="scroll-smooth">
@@ -133,13 +140,67 @@ try {
                 <?php if (!empty($kost_list)): ?>
                     <?php foreach ($kost_list as $index => $kost): ?>
                     <div class="bg-white rounded-lg sm:rounded-xl shadow-lg overflow-hidden card-hover border border-gray-200 hover:border-blue-300 transition-colors">
-                        <div class="h-40 sm:h-48 bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
-                            <div class="text-center text-white">
-                                <i class='bx bx-home-alt text-5xl sm:text-6xl mb-2 sm:mb-4'></i>
-                                <p class="text-base sm:text-lg font-semibold">Kos</p>
+                        <?php 
+                            $gambar = !empty($kost['gambar']) ? $kost['gambar'] : ($kost['room_foto'] ?? '');
+                            $is_url = strpos($gambar, 'http') === 0;
+                            $is_room = (!empty($kost['room_foto']) && $gambar === $kost['room_foto'] && empty($kost['gambar']));
+                            $folder = $is_room ? 'uploads/rooms/' : 'uploads/kost/';
+                            $img_src = $is_url ? $gambar : $folder . $gambar;
+                            
+                            if (!empty($gambar) && ($is_url || file_exists(__DIR__ . '/' . $img_src))): 
+                        ?>
+                            <div class="h-40 sm:h-48 overflow-hidden group relative">
+                                <img src="<?php echo htmlspecialchars($img_src); ?>" alt="<?php echo htmlspecialchars($kost['nama_kost']); ?>" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110">
+                                
+                                <!-- Availability badge only on image (top-right) -->
+                                <div class="absolute top-2 right-2">
+                                    <div class="bg-green-500/90 backdrop-blur-md text-white text-xs px-3 py-1.5 rounded-md font-bold shadow-md flex items-center gap-1.5">
+                                        <i class='bx bx-check-circle'></i> Tersedia
+                                    </div>
+                                </div>
+
+                                <?php if ($is_room): ?>
+                                    <div class="absolute bottom-2 right-2 bg-blue-600/80 backdrop-blur-md text-white text-[10px] px-2 py-1 rounded-md font-medium">
+                                        <i class="fas fa-bed mr-1"></i>Foto Kamar
+                                    </div>
+                                <?php endif; ?>
                             </div>
-                        </div>
+                        <?php else: ?>
+                            <div class="h-40 sm:h-48 bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
+                                <div class="text-center text-white">
+                                    <i class='bx bx-home-alt text-5xl sm:text-6xl mb-2 sm:mb-4'></i>
+                                    <p class="text-base sm:text-lg font-semibold">Kos</p>
+                                </div>
+                            </div>
+                        <?php endif; ?>
                         <div class="p-4 sm:p-6">
+                            <!-- Status badges moved outside image -->
+                            <div class="flex items-center gap-2 mb-3 flex-wrap">
+                                <?php 
+                                    $tipe = $kost['tipe_kost'] ?? 'Campuran';
+                                    $tipe_bg = 'bg-gray-100';
+                                    $tipe_text = 'text-gray-700';
+                                    $tipe_icon = '🚻';
+                                    if ($tipe === 'Putra') {
+                                        $tipe_bg = 'bg-blue-50';
+                                        $tipe_text = 'text-blue-700';
+                                        $tipe_icon = '🚹';
+                                    } elseif ($tipe === 'Putri') {
+                                        $tipe_bg = 'bg-pink-50';
+                                        $tipe_text = 'text-pink-700';
+                                        $tipe_icon = '🚺';
+                                    }
+                                ?>
+                                <span class="<?php echo $tipe_bg; ?> <?php echo $tipe_text; ?> px-3 py-1 rounded-full text-xs font-bold border border-current border-opacity-20">
+                                    <?php echo $tipe_icon . ' ' . $tipe; ?>
+                                </span>
+                                <?php if (!empty($kost['jenis_kamar'])): ?>
+                                    <span class="bg-purple-50 text-purple-700 px-3 py-1 rounded-full text-xs font-bold border border-purple-200">
+                                        🛏️ <?php echo htmlspecialchars($kost['jenis_kamar']); ?>
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                            
                             <h3 class="text-lg sm:text-xl font-semibold text-gray-800 mb-2 line-clamp-2"><?php echo htmlspecialchars($kost['nama_kost']); ?></h3>
                             <p class="text-gray-600 text-xs sm:text-sm mb-2 sm:mb-3 line-clamp-2">
                                 <i class='bx bx-map mr-1 sm:mr-2 text-blue-500'></i>

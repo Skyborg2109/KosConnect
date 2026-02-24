@@ -1,0 +1,23 @@
+# Disable Directory Listing
+Options -Indexes
+DirectoryIndex index.php
+
+# Error Pages
+ErrorDocument 403 /index.php
+ErrorDocument 404 /index.php
+
+# Block access to sensitive files
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+<Files "full_database.sql">
+    Order allow,deny
+    Deny from all
+</Files>
+
+<Files "config/db.php">
+    Order allow,deny
+    Deny from all
+</Files>

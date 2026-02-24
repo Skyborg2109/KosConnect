@@ -4,20 +4,31 @@
  */
 
 function checkMultiDeviceSession($conn) {
-    // Check dari session variable atau cookie
     $session_token = $_SESSION['session_token'] ?? $_COOKIE['session_token'] ?? null;
     
     if (!$session_token) {
         return false;
     }
     
-    // Validate token dari database
     require_once __DIR__ . '/SessionManager.php';
     $sessionManager = new SessionManager($conn);
     $user_id = $sessionManager->validateSessionToken($session_token);
     
     if ($user_id) {
-        // Token valid, update session variables jika perlu
+        // Restore session data if missing (Role, Fullname, Logged In status)
+        if (!isset($_SESSION['user_logged_in']) || !isset($_SESSION['role'])) {
+            $stmt = $conn->prepare("SELECT role, nama_lengkap FROM user WHERE id_user = ?");
+            $stmt->bind_param("i", $user_id);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($user = $res->fetch_assoc()) {
+                $_SESSION['user_logged_in'] = true;
+                $_SESSION['role'] = $user['role'];
+                $_SESSION['fullname'] = $user['nama_lengkap'];
+            }
+            $stmt->close();
+        }
+
         if (!isset($_SESSION['user_id'])) {
             $_SESSION['user_id'] = $user_id;
         }

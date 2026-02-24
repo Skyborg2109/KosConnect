@@ -56,9 +56,18 @@ $res_pending_payments = $stmt->get_result();
                         
                         <?php if ($status === 'menunggu'): ?>
                             <div class="flex space-x-3 mt-3 pt-3 border-t border-gray-200">
-                                <a href="../uploads/payments/<?php echo htmlspecialchars($row['bukti_pembayaran']); ?>" target="_blank" class="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">
+                                <?php 
+                                    $proof = $row['bukti_pembayaran'];
+                                    $isUrl = strpos($proof, 'http') === 0;
+                                    $checkPath = '../uploads/payments/' . $proof;
+                                    
+                                    if ($isUrl || file_exists($checkPath)): 
+                                        $proofSrc = $isUrl ? $proof : $checkPath;
+                                ?>
+                                <a href="<?php echo htmlspecialchars($proofSrc); ?>" target="_blank" class="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">
                                     <i class="fas fa-eye mr-1"></i> Lihat Bukti
                                 </a>
+                                <?php endif; ?>
                                 <button onclick="handlePaymentAction(<?php echo $row['id_payment']; ?>, <?php echo $row['id_booking']; ?>, 'verify')" class="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600">
                                     <i class="fas fa-check mr-1"></i> Verifikasi
                                 </button>

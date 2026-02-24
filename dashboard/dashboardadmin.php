@@ -1,7 +1,8 @@
 <?php
 session_start();
 // --- AUTENTIKASI ---
-if (!isset($_SESSION['user_logged_in']) || $_SESSION['role'] !== 'admin') { //
+if (!isset($_SESSION['user_logged_in']) || $_SESSION['role'] !== 'admin') { 
+    $_SESSION['login_error'] = "Anda harus login terlebih dahulu untuk mengakses halaman ini.";
     header("Location: ../auth/loginForm.php");
     exit();
 }
@@ -32,6 +33,7 @@ $sql_stats = "SELECT
     (SELECT COUNT(id_booking) FROM booking WHERE status IN ('dibayar', 'selesai')) AS total_booking_aktif,
     (SELECT COUNT(id_complaint) FROM complaint WHERE status IN ('baru', 'diproses')) AS total_complaint_open,
     (SELECT COUNT(id_payment) FROM pembayaran WHERE status_pembayaran = 'menunggu') AS total_payment_pending,
+    (SELECT COUNT(*) FROM notifications WHERE id_user = {$adminID} AND is_read = 0) AS total_unread_notif,
     (SELECT COUNT(id_user) FROM user WHERE role = 'penyewa') AS total_penyewa";
 $stats = $conn->query($sql_stats)->fetch_assoc();
 $total_penyewa = $stats['total_user'] - $stats['total_pemilik'] - 1;
@@ -323,6 +325,7 @@ $res_latest_payments = $conn->query($sql_latest_payments); //
         box-shadow: 2px 0 15px rgba(0, 0, 0, 0.3);
         transform: translateX(-100%);
         transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        animation: none;
       }
 
       .sidebar.show-mobile {
@@ -494,8 +497,8 @@ $res_latest_payments = $conn->query($sql_latest_payments); //
                 </div>
                 <button onclick="showNotifications()" class="relative text-slate-600 hover:text-indigo-600 p-2 sm:p-3 rounded-xl hover:bg-indigo-50 transition-all flex-shrink-0">
                     <i class="fas fa-bell text-lg sm:text-xl"></i>
-                    <?php if ($stats['total_payment_pending'] > 0): ?>
-                    <span class="notification-badge absolute -top-1 -right-1 bg-gradient-to-r from-red-500 to-red-600 text-white text-xs rounded-full h-5 w-5 sm:h-6 sm:w-6 flex items-center justify-center font-bold shadow-lg text-xxs sm:text-xs"><?php echo $stats['total_payment_pending']; ?></span>
+                    <?php if ($stats['total_unread_notif'] > 0): ?>
+                    <span class="notification-badge absolute -top-1 -right-1 bg-gradient-to-r from-red-500 to-red-600 text-white text-xs rounded-full h-5 w-5 sm:h-6 sm:w-6 flex items-center justify-center font-bold shadow-lg text-xxs sm:text-xs"><?php echo $stats['total_unread_notif']; ?></span>
                     <?php endif; ?>
                 </button>
             </div>
@@ -555,7 +558,9 @@ $res_latest_payments = $conn->query($sql_latest_payments); //
     }
 
     function loadContent(moduleName, event) {
-        if (event) event.preventDefault();
+        if (event && typeof event.preventDefault === 'function') {
+            event.preventDefault();
+        }
 
         // Close mobile menu when loading content
         closeMobileMenu();
@@ -655,7 +660,12 @@ $res_latest_payments = $conn->query($sql_latest_payments); //
 
         // Check if there's a saved active module in localStorage
         const savedModule = localStorage.getItem('activeAdminModule');
-        const moduleToLoad = savedModule || 'admin_dashboard_summary';
+        
+        // Check for URL parameter 'module' (priority over localStorage)
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlModule = urlParams.get('module');
+        
+        const moduleToLoad = urlModule || savedModule || 'admin_dashboard_summary';
         
         // Load the module (saved or default dashboard)
         loadContent(moduleToLoad);
@@ -713,78 +723,82 @@ $res_latest_payments = $conn->query($sql_latest_payments); //
         });
     });
 
+
     function showNotifications() {
-        const pendingPayments = <?php echo $stats['total_payment_pending']; ?>;
-        const openComplaints = <?php echo $stats['total_complaint_open']; ?>;
-        
-        let notifications = [];
-        
-        if (pendingPayments > 0) {
-            notifications.push({
-                icon: 'fa-money-bill-wave',
-                iconColor: 'from-yellow-400 to-orange-500',
-                title: 'Pembayaran Pending',
-                message: `Ada <strong>${pendingPayments}</strong> pembayaran yang menunggu verifikasi`,
-                action: 'admin_manage_transactions'
-            });
+        // Optimistic UI update: Sembunyikan badge segera
+        const badge = document.querySelector('.notification-badge');
+        if (badge) {
+            badge.style.animation = 'fadeOut 0.3s ease';
+            setTimeout(() => badge.remove(), 300);
         }
-        
-        if (openComplaints > 0) {
-            notifications.push({
-                icon: 'fa-exclamation-circle',
-                iconColor: 'from-red-400 to-pink-500',
-                title: 'Keluhan Baru',
-                message: `Ada <strong>${openComplaints}</strong> keluhan yang belum ditangani`,
-                action: 'admin_manage_complaints'
-            });
-        }
-        
-        if (notifications.length > 0) {
-            let html = '<div class="max-h-96 overflow-y-auto">';
-            notifications.forEach(notif => {
-                html += `
-                    <div class="p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer" onclick="handleNotificationClick('${notif.action}')">
-                        <div class="flex items-start space-x-3">
-                            <div class="w-12 h-12 rounded-full bg-gradient-to-br ${notif.iconColor} flex items-center justify-center flex-shrink-0 shadow-md">
-                                <i class="fas ${notif.icon} text-white text-lg"></i>
-                            </div>
-                            <div class="flex-1">
-                                <p class="text-sm font-bold text-slate-800">${notif.title}</p>
-                                <p class="text-sm text-gray-600 mt-1">${notif.message}</p>
-                                <p class="text-xs text-indigo-600 font-semibold mt-2">
-                                    <i class="fas fa-arrow-right mr-1"></i>Klik untuk melihat detail
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            });
-            html += '</div>';
-            
-            Swal.fire({
-                title: '<span class="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Notifikasi</span>',
-                html: html,
-                width: '600px',
-                showCloseButton: true,
-                showConfirmButton: false,
-                customClass: {
-                    popup: 'rounded-2xl',
-                    closeButton: 'hover:bg-gray-100 rounded-lg transition-colors'
+
+        // Fetch notifications from database (similar to tenant dashboard)
+        fetch('../admin/admin_get_notifications.php')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success' && data.notifications.length > 0) {
+                    let notifHtml = '<div class="space-y-3 text-left max-h-96 overflow-y-auto pr-2">';
+                    data.notifications.forEach(notif => {
+                        const readClass = notif.is_read == 1 ? 'opacity-60' : 'font-semibold border-l-4 border-indigo-500';
+                        const icon = notif.is_read == 1 ? 'fa-envelope-open' : 'fa-envelope';
+                        notifHtml += `
+                            <div class="p-4 border rounded-xl hover:bg-gray-50 ${readClass} transition-all duration-300 hover:shadow-md">
+                                <div class="flex items-start space-x-3">
+                                    <div class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                        <i class="fas ${icon} text-indigo-600"></i>
+                                    </div>
+                                    <div class="flex-grow">
+                                        <p class="text-sm text-gray-800">${notif.pesan}</p>
+                                        <div class="flex justify-between items-center mt-2">
+                                            <span class="text-xs text-gray-400">
+                                                <i class="far fa-clock mr-1"></i>${notif.created_at}
+                                            </span>
+                                            ${(() => {
+                                                if (!notif.link) return '';
+                                                let cleanLink = notif.link;
+                                                // Sanitize link for virtual host
+                                                if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                                                    if (cleanLink.startsWith('/KosConnect/')) {
+                                                        cleanLink = cleanLink.replace('/KosConnect/', '/');
+                                                    }
+                                                }
+                                                return `<a href="${cleanLink}" class="text-xs text-indigo-600 hover:text-indigo-700 font-medium hover:underline">Lihat Detail →</a>`;
+                                            })()}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>`;
+                    });
+                    notifHtml += '</div>';
+
+                    Swal.fire({
+                        title: '<strong class="text-2xl">📬 Notifikasi Anda</strong>',
+                        html: notifHtml,
+                        width: '600px',
+                        showConfirmButton: true,
+                        confirmButtonText: '<i class="fas fa-check-double mr-2"></i>Tandai Semua Sudah Dibaca',
+                        confirmButtonColor: '#6366f1',
+                        customClass: {
+                            popup: 'rounded-2xl',
+                            confirmButton: 'rounded-lg px-6 py-3'
+                        }
+                    }).then(() => {
+                        fetch('../admin/admin_get_notifications.php', { method: 'POST' });
+                    });
+                } else {
+                    Swal.fire({
+                        title: 'Notifikasi',
+                        html: '<div class="text-center py-4"><i class="fas fa-inbox text-gray-300 text-5xl mb-4"></i><p class="text-gray-600">Tidak ada notifikasi baru.</p></div>',
+                        icon: 'info',
+                        confirmButtonColor: '#6366f1',
+                        customClass: {
+                            popup: 'rounded-2xl'
+                        }
+                    });
                 }
             });
-        } else {
-            Swal.fire({
-                icon: 'info',
-                title: 'Tidak Ada Notifikasi',
-                text: 'Semua dalam keadaan baik! Tidak ada notifikasi baru.',
-                confirmButtonColor: '#6366f1',
-                customClass: {
-                    popup: 'rounded-2xl',
-                    confirmButton: 'rounded-xl font-semibold px-6 py-3'
-                }
-            });
-        }
     }
+
 
     function handleNotificationClick(moduleName) {
         Swal.close();

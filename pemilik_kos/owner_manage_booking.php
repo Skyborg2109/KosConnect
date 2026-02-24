@@ -21,7 +21,8 @@ if ($filter_status !== 'all') {
 
 // Ambil semua booking berdasarkan filter
 $sql_bookings = "
-    SELECT b.id_booking, b.tanggal_booking, b.status, u.nama_lengkap AS nama_penyewa, k.nama_kamar, t.nama_kost
+    SELECT b.id_booking, b.tanggal_booking, b.status, u.nama_lengkap AS nama_penyewa, k.nama_kamar, t.nama_kost,
+           (SELECT bukti_pembayaran FROM pembayaran WHERE id_booking = b.id_booking ORDER BY id_payment DESC LIMIT 1) AS bukti_pembayaran
     FROM booking b
     JOIN user u ON b.id_penyewa = u.id_user
     JOIN kamar k ON b.id_kamar = k.id_kamar
@@ -95,11 +96,28 @@ $res_bookings = $stmt->get_result();
                                 </button>
                             </div>
                         <?php else: ?>
-                            <div class="mt-4 pt-4 border-t border-gray-200">
+                            <div class="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
                                 <p class="text-sm text-gray-500 italic flex items-center">
                                     <i class="fas fa-info-circle mr-2"></i>
                                     Pesanan ini telah diproses
                                 </p>
+                                <?php 
+                                    if (!empty($row['bukti_pembayaran'])) {
+                                        $proof = $row['bukti_pembayaran'];
+                                        $isUrl = strpos($proof, 'http') === 0;
+                                        // Use absolute path for file_exists check, relative for browser
+                                        $checkPath = '../uploads/payments/' . $proof;
+                                        
+                                        if ($isUrl || file_exists($checkPath)) {
+                                            $proofSrc = $isUrl ? $proof : $checkPath;
+                                ?>
+                                    <a href="<?php echo htmlspecialchars($proofSrc); ?>" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm font-semibold flex items-center bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-lg transition-colors">
+                                        <i class="fas fa-receipt mr-2"></i>Lihat Bukti Bayar
+                                    </a>
+                                <?php 
+                                        }
+                                    }
+                                ?>
                             </div>
                         <?php endif; ?>
                     </div>

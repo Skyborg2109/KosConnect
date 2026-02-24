@@ -27,6 +27,12 @@ if (isset($_SESSION['resend_success'])) {
     unset($_SESSION['resend_success']); // Hapus penanda agar tidak muncul lagi
 }
 
+// --- Cek Notifikasi Error Login (Redirect dari halaman lain) ---
+if (isset($_SESSION['login_error'])) {
+    $error = $_SESSION['login_error'];
+    unset($_SESSION['login_error']);
+}
+
 // --- Tidak redirect otomatis agar support multi-login di multiple tabs/devices ---
 // User bisa stay di login page untuk login sebagai role berbeda di tab lain
 // Session token di cookie akan handle state management untuk different roles
@@ -46,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // Query aman dengan prepared statement
-        $sql = "SELECT id_user, nama_lengkap, password, role, is_active, is_blocked FROM user WHERE email = ?";
+        $sql = "SELECT id_user, nama_lengkap, password, role, is_active, is_blocked, foto_profil FROM user WHERE email = ?";
         $stmt = mysqli_prepare($conn, $sql);
         mysqli_stmt_bind_param($stmt, "s", $email);
         mysqli_stmt_execute($stmt);
@@ -87,6 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         // SETEL VARIABEL SESI dengan session token
                         $_SESSION['user_id'] = $user['id_user'];
                         $_SESSION['fullname'] = $user['nama_lengkap'];
+                        $_SESSION['foto_profil'] = $user['foto_profil']; // Simpan foto profil ke sesi
                         $_SESSION['role'] = $user['role'];
                         $_SESSION['user_logged_in'] = true;
                         

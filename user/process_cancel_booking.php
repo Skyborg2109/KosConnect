@@ -60,6 +60,33 @@ try {
     $stmt_kamar->bind_param("si", $new_kamar_status, $id_kamar);
     $stmt_kamar->execute();
 
+    // 6. [NEW] Notifikasi ke Admin (Pembatalan Booking - All Admins)
+    $stmt_admin = $conn->prepare("SELECT id_user FROM user WHERE role = 'admin'");
+    $stmt_admin->execute();
+    $res_admin = $stmt_admin->get_result();
+    
+    // Ambil info kamar/kost untuk pesan
+    $stmt_info = $conn->prepare("SELECT k.nama_kamar, t.nama_kost FROM kamar k JOIN kost t ON k.id_kost = t.id_kost WHERE k.id_kamar = ?");
+    $stmt_info->bind_param("i", $id_kamar);
+    $stmt_info->execute();
+    $info = $stmt_info->get_result()->fetch_assoc();
+    $stmt_info->close();
+    
+    $nama_info = $info ? "{$info['nama_kamar']} at {$info['nama_kost']}" : "Booking #{$id_booking}";
+    $pesan_notif = "Booking Dibatalkan oleh User: {$nama_info} (ID Booking: {$id_booking})";
+    $link_notif = '/KosConnect/dashboard/dashboardadmin.php?module=admin_manage_transactions';
+    
+    $stmt_notif = $conn->prepare("INSERT INTO notifications (id_user, pesan, link) VALUES (?, ?, ?)");
+    
+    while ($data_admin = $res_admin->fetch_assoc()) {
+        $id_admin = $data_admin['id_user'];
+        $stmt_notif->bind_param("iss", $id_admin, $pesan_notif, $link_notif);
+        $stmt_notif->execute();
+    }
+    
+    $stmt_notif->close();
+    $stmt_admin->close();
+
     // 6. Jika semua berhasil, commit transaksi
     $conn->commit();
 

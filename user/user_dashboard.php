@@ -23,6 +23,59 @@ $id_penyewa = $_SESSION['user_id'];
 $userEmail = $_SESSION['email'] ?? '';
 $userPhoto = $_SESSION['foto_profil'] ?? null;
 
+// Handle Payment Redirects
+if (isset($_GET['payment'])) {
+    if ($_GET['payment'] === 'success') {
+        // Attempt search for any pending invoices for this user and sync them
+        try {
+            require_once '../services/XenditService.php';
+            // Need to check Xendit SDK is loaded (it handles its own autoload checking in Service but here we might need it)
+            if (file_exists('../vendor/autoload.php')) {
+                require_once '../vendor/autoload.php';
+            }
+            
+            $xenditService = new XenditService($conn);
+            
+            // Get pending invoices for this user's bookings
+            $stmt_pending = $conn->prepare("
+                SELECT xi.external_id 
+                FROM xendit_invoices xi
+                JOIN booking b ON xi.id_booking = b.id_booking
+                WHERE b.id_penyewa = ? AND xi.status = 'PENDING'
+            ");
+            $stmt_pending->bind_param("i", $id_penyewa);
+            $stmt_pending->execute();
+            $result_pending = $stmt_pending->get_result();
+            
+            $synced_count = 0;
+            while ($row = $result_pending->fetch_assoc()) {
+                $syncResult = $xenditService->syncInvoiceStatus($row['external_id']);
+                if ($syncResult['success'] && ($syncResult['status'] == 'PAID' || $syncResult['status'] == 'SETTLED')) {
+                    $synced_count++;
+                }
+            }
+            $stmt_pending->close();
+            
+            if ($synced_count > 0) {
+                $_SESSION['payment_success'] = "Pembayaran berhasil! $synced_count pesanan telah dikonfirmasi.";
+            } else {
+                $_SESSION['payment_success'] = "Pembayaran berhasil! Terima kasih telah melakukan pembayaran.";
+            }
+            
+        } catch (Exception $e) {
+            error_log("Dashboard Sync Error: " . $e->getMessage());
+            $_SESSION['payment_success'] = "Pembayaran berhasil! (Status akan segera diperbarui)";
+        }
+
+        // Clean URL
+        echo "<script>window.history.replaceState(null, null, window.location.pathname);</script>";
+    } elseif ($_GET['payment'] === 'failed') {
+        $_SESSION['error'] = "Pembayaran gagal atau dibatalkan.";
+        // Clean URL
+        echo "<script>window.history.replaceState(null, null, window.location.pathname);</script>";
+    }
+}
+
 // Notification count (optional)
 // Ambil jumlah notifikasi yang belum dibaca dari database
 $stmt_notif = $conn->prepare("SELECT COUNT(*) as count FROM notifications WHERE id_user = ? AND is_read = 0");
@@ -81,11 +134,13 @@ $booking_history = [
 $stmt_history = $conn->prepare("
     SELECT 
         b.id_booking, b.tanggal_booking, b.status,
-        k.nama_kamar, k.harga,
-        t.nama_kost, t.alamat
+        k.nama_kamar, k.harga, k.foto AS room_foto,
+        t.nama_kost, t.alamat, t.gambar, t.fasilitas, t.deskripsi,
+        u.nama_lengkap AS nama_pemilik
     FROM booking b
     INNER JOIN kamar k ON b.id_kamar = k.id_kamar
     INNER JOIN kost t ON k.id_kost = t.id_kost
+    LEFT JOIN user u ON t.id_pemilik = u.id_user
     WHERE b.id_penyewa = ?
     ORDER BY b.tanggal_booking DESC
 ");
@@ -386,6 +441,217 @@ $conn->close();
         /* Page Animation */
         main {
             animation: fadeIn 0.6s ease-out;
+        }
+        
+        /* Enhanced Order History Styles */
+        .history-card {
+            position: relative;
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            background: white;
+        }
+        
+        .history-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: linear-gradient(90deg, var(--card-color-1), var(--card-color-2));
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 0.4s ease;
+        }
+        
+        .history-card:hover::before {
+            transform: scaleX(1);
+        }
+        
+        .history-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.12);
+        }
+        
+        /* Card Variants */
+        .history-card.aktif {
+            --card-color-1: #10b981;
+            --card-color-2: #059669;
+            border-left: 4px solid #10b981;
+        }
+        
+        .history-card.pending {
+            --card-color-1: #f59e0b;
+            --card-color-2: #d97706;
+            border-left: 4px solid #f59e0b;
+        }
+        
+        .history-card.menunggu_pembayaran {
+            --card-color-1: #3b82f6;
+            --card-color-2: #2563eb;
+            border-left: 4px solid #3b82f6;
+        }
+        
+        .history-card.selesai {
+            --card-color-1: #6b7280;
+            --card-color-2: #4b5563;
+            border-left: 4px solid #6b7280;
+        }
+        
+        .history-card.ditolak {
+            --card-color-1: #ef4444;
+            --card-color-2: #dc2626;
+            border-left: 4px solid #ef4444;
+        }
+        
+        .history-card.batal {
+            --card-color-1: #f97316;
+            --card-color-2: #ea580c;
+            border-left: 4px solid #f97316;
+        }
+        
+        /* Filter Pills */
+        .filter-pill {
+            padding: 0.625rem 1.5rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: 2px solid #e5e7eb;
+            background: white;
+            color: #6b7280;
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .filter-pill:hover {
+            background: #f9fafb;
+            border-color: #d1d5db;
+            transform: translateY(-2px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        
+        .filter-pill.active {
+            background: linear-gradient(135deg, #8B5CF6, #6366F1);
+            color: white;
+            border-color: #8B5CF6;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        .filter-pill i {
+            font-size: 0.875rem;
+        }
+        
+        /* Price Badge */
+        .price-badge {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            color: #92400e;
+            padding: 0.5rem 1rem;
+            border-radius: 0.75rem;
+            font-weight: 700;
+            font-size: 1.125rem;
+            box-shadow: 0 2px 8px rgba(251, 191, 36, 0.2);
+        }
+        
+        /* Info Badge */
+        .info-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.375rem 0.75rem;
+            background: #f3f4f6;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            color: #4b5563;
+            font-weight: 500;
+        }
+        
+        .info-badge i {
+            margin-right: 0.5rem;
+            color: #8B5CF6;
+        }
+        
+        /* Stagger Animation */
+        @keyframes staggerFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .history-card {
+            animation: staggerFadeIn 0.5s ease-out backwards;
+        }
+        
+        .history-card:nth-child(1) { animation-delay: 0.1s; }
+        .history-card:nth-child(2) { animation-delay: 0.2s; }
+        .history-card:nth-child(3) { animation-delay: 0.3s; }
+        .history-card:nth-child(4) { animation-delay: 0.4s; }
+        .history-card:nth-child(5) { animation-delay: 0.5s; }
+        
+        /* Search Box */
+        .search-box {
+            position: relative;
+        }
+        
+        .search-box input {
+            padding-left: 3rem;
+            transition: all 0.3s ease;
+        }
+        
+        .search-box input:focus {
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+            border-color: #8B5CF6;
+        }
+        
+        .search-box i {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9ca3af;
+        }
+        
+        /* Section Header Enhanced */
+        .section-header-enhanced {
+            background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+            padding: 1.5rem;
+            border-radius: 1rem;
+            border-left: 4px solid;
+            margin-bottom: 1.5rem;
+        }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
+            border-radius: 1.5rem;
+            border: 2px dashed #e5e7eb;
+        }
+        
+        .empty-state-icon {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 1.5rem;
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .empty-state-icon i {
+            font-size: 3rem;
+            color: #9ca3af;
         }
 
         /* Mobile Responsive Design */
@@ -775,8 +1041,11 @@ $conn->close();
                             <?php endif; ?>
                         </button>
                         <button onclick="showProfileModal()" class="user-info-box">
-                            <?php if ($userPhoto): ?>
-                                <img id="headerUserPhoto" src="../uploads/profiles/<?php echo htmlspecialchars($userPhoto); ?>" alt="Foto Profil" class="w-9 h-9 rounded-full object-cover ring-2 ring-purple-200">
+                            <?php if ($userPhoto): 
+                                $isUrl = strpos($userPhoto, 'http') === 0;
+                                $photoSrc = $isUrl ? $userPhoto : "../uploads/profiles/" . htmlspecialchars($userPhoto);
+                            ?>
+                                <img id="headerUserPhoto" src="<?php echo $photoSrc; ?>" alt="Foto Profil" class="w-9 h-9 rounded-full object-cover ring-2 ring-purple-200">
                             <?php else: ?>
                                 <div id="headerUserPhoto" class="w-9 h-9 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white font-bold shadow-md">
                                     <?php echo strtoupper(substr($userName, 0, 1)); ?>
@@ -811,56 +1080,57 @@ $conn->close();
     </nav>
 
     <!-- Mobile Navigation Drawer -->
-    <div id="mobileMenuDrawer" class="fixed inset-0 z-40 md:hidden pointer-events-none" style="pointer-events: none;">
+    <div id="mobileMenuDrawer" class="fixed inset-0 z-50 md:hidden pointer-events-none" style="pointer-events: none;">
         <!-- Backdrop -->
         <div id="mobileMenuBackdrop" class="absolute inset-0 bg-black bg-opacity-50 transition-opacity duration-300 opacity-0 pointer-events-none" onclick="toggleMobileMenu()" style="pointer-events: none;"></div>
         
         <!-- Drawer -->
-        <div class="absolute right-0 top-0 h-full w-64 bg-white shadow-2xl transform translate-x-full transition-transform duration-300" id="mobileMenuPanel" style="pointer-events: auto;">
-            <!-- Close Button -->
-            <div class="flex items-center justify-between p-4 border-b border-gray-100">
-                <h2 class="text-xl font-bold text-gray-800">Menu</h2>
-                <button onclick="toggleMobileMenu()" class="p-2 text-gray-600 hover:text-purple-600 rounded-lg">
+        <div class="absolute right-0 top-0 h-full w-full max-w-sm bg-white shadow-2xl transform translate-x-full transition-transform duration-300 flex flex-col" id="mobileMenuPanel" style="pointer-events: auto;">
+            <!-- Close Button & Header -->
+            <div class="flex items-center justify-between p-6 border-b border-gray-100 bg-white sticky top-0 z-10">
+                <h2 class="text-2xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent">Menu</h2>
+                <button onclick="toggleMobileMenu()" class="p-2 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors focus:outline-none">
                     <i class="fas fa-times text-xl"></i>
                 </button>
             </div>
             
-            <!-- Navigation Links -->
-            <nav class="p-4 space-y-1">
-                <a href="../dashboard/dashboarduser.php" class="flex items-center px-4 py-3 text-gray-700 hover:bg-purple-50 hover:text-purple-600 rounded-lg font-medium transition-colors mobile-menu-link" onclick="handleMobileMenuClick(event)">
-                    <i class="fas fa-home mr-3 text-purple-600"></i>Beranda
-                </a>
-                <a href="user_dashboard.php" class="flex items-center px-4 py-3 text-gray-700 hover:bg-purple-50 hover:text-purple-600 rounded-lg font-medium transition-colors mobile-menu-link" onclick="handleMobileMenuClick(event)">
-                    <i class="fas fa-chart-line mr-3 text-blue-600"></i>Dashboard
-                </a>
-                <a href="../dashboard/dashboarduser.php#pilihan-kos" class="flex items-center px-4 py-3 text-gray-700 hover:bg-purple-50 hover:text-purple-600 rounded-lg font-medium transition-colors mobile-menu-link" onclick="handleMobileMenuClick(event)">
-                    <i class="fas fa-building mr-3 text-orange-600"></i>Pilihan Kos
-                </a>
-                <a href="wishlist.php" class="flex items-center px-4 py-3 text-gray-700 hover:bg-purple-50 hover:text-purple-600 rounded-lg font-medium transition-colors mobile-menu-link" onclick="handleMobileMenuClick(event)">
-                    <i class="fas fa-heart mr-3 text-red-600"></i>Favorit
-                </a>
-                <a href="feedback.php" class="flex items-center px-4 py-3 text-gray-700 hover:bg-purple-50 hover:text-purple-600 rounded-lg font-medium transition-colors mobile-menu-link" onclick="handleMobileMenuClick(event)">
-                    <i class="fas fa-comment mr-3 text-green-600"></i>Feedback
-                </a>
-                <a href="../dashboard/dashboarduser.php#kontak" class="flex items-center px-4 py-3 text-gray-700 hover:bg-purple-50 hover:text-purple-600 rounded-lg font-medium transition-colors mobile-menu-link" onclick="handleMobileMenuClick(event)">
-                    <i class="fas fa-phone mr-3 text-cyan-600"></i>Kontak
-                </a>
-            </nav>
+            <!-- Navigation Links Wrapper -->
+            <div class="flex-1 overflow-y-auto p-6 scroll-smooth">
+                <nav class="space-y-2">
+                    <a href="../dashboard/dashboarduser.php" class="flex items-center px-4 py-3 text-gray-700 hover:bg-purple-50 hover:text-purple-600 rounded-lg font-medium transition-colors" onclick="handleMobileMenuClick(event)">
+                        <span class="w-8 flex justify-center mr-2"><i class="fas fa-home text-purple-600"></i></span>Beranda
+                    </a>
+                    <a href="user_dashboard.php" class="flex items-center px-4 py-3 text-purple-600 bg-purple-50 rounded-lg font-semibold transition-colors" onclick="handleMobileMenuClick(event)">
+                        <span class="w-8 flex justify-center mr-2"><i class="fas fa-chart-line text-blue-600"></i></span>Dashboard
+                    </a>
+                    <a href="../dashboard/dashboarduser.php#pilihan-kos" class="flex items-center px-4 py-3 text-gray-700 hover:bg-purple-50 hover:text-purple-600 rounded-lg font-medium transition-colors" onclick="handleMobileMenuClick(event)">
+                        <span class="w-8 flex justify-center mr-2"><i class="fas fa-building text-orange-600"></i></span>Pilihan Kos
+                    </a>
+                    <a href="wishlist.php" class="flex items-center px-4 py-3 text-gray-700 hover:bg-purple-50 hover:text-purple-600 rounded-lg font-medium transition-colors" onclick="handleMobileMenuClick(event)">
+                        <span class="w-8 flex justify-center mr-2"><i class="fas fa-heart text-red-600"></i></span>Favorit
+                    </a>
+                    <a href="feedback.php" class="flex items-center px-4 py-3 text-gray-700 hover:bg-purple-50 hover:text-purple-600 rounded-lg font-medium transition-colors" onclick="handleMobileMenuClick(event)">
+                        <span class="w-8 flex justify-center mr-2"><i class="fas fa-comment text-green-600"></i></span>Feedback
+                    </a>
+                    <a href="../dashboard/dashboarduser.php#kontak" class="flex items-center px-4 py-3 text-gray-700 hover:bg-purple-50 hover:text-purple-600 rounded-lg font-medium transition-colors" onclick="handleMobileMenuClick(event)">
+                        <span class="w-8 flex justify-center mr-2"><i class="fas fa-phone text-cyan-600"></i></span>Kontak
+                    </a>
+                </nav>
+            </div>
             
-            <!-- Divider -->
-            <div class="border-t border-gray-100 my-4"></div>
-            
-            <!-- User Actions -->
-            <div class="p-4 space-y-3 relative z-50">
-                <button id="mobileProfileBtn" class="w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-medium hover:from-purple-700 hover:to-indigo-700 transition-all flex items-center justify-center cursor-pointer" type="button" data-action="profile">
-                    <i class="fas fa-user mr-2"></i>Profil
-                </button>
-                <button id="mobileNotifBtn" class="w-full px-4 py-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-all flex items-center justify-center cursor-pointer" type="button" data-action="notif">
-                    <i class="fas fa-bell mr-2"></i>Notifikasi
-                </button>
-                <button id="mobileLogoutBtn" class="w-full px-4 py-3 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-all text-center flex items-center justify-center cursor-pointer" type="button" data-action="logout">
-                    <i class="fas fa-sign-out-alt mr-2"></i>Logout
-                </button>
+            <!-- User Actions Footer -->
+            <div class="p-6 border-t border-gray-100 bg-gray-50">
+                <div class="space-y-3">
+                    <button id="drawerProfileBtn" onclick="showProfileModal()" class="w-full flex items-center justify-center px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-indigo-500/30 transition-all transform active:scale-95" type="button">
+                        <i class="fas fa-user mr-2"></i>Profil
+                    </button>
+                    <button id="drawerNotifBtn" onclick="showNotifications()" class="w-full flex items-center justify-center px-4 py-3 bg-white text-gray-700 border border-gray-200 rounded-xl font-semibold hover:bg-gray-50 transition-all transform active:scale-95" type="button">
+                        <i class="fas fa-bell mr-2 text-yellow-500"></i>Notifikasi
+                    </button>
+                    <a href="../auth/logout.php" onclick="confirmLogout(event)" id="drawerLogoutBtn" class="w-full flex items-center justify-center px-4 py-3 bg-red-50 text-red-600 rounded-xl font-semibold hover:bg-red-100 transition-all transform active:scale-95">
+                        <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                    </a>
+                </div>
             </div>
         </div>
     </div>
@@ -1007,233 +1277,249 @@ $conn->close();
             <!-- TAMPILAN RIWAYAT BOOKING (dipindahkan dari booking.php) -->
             <!-- ======================================================= -->
             <div id="riwayat" class="pt-6 sm:pt-8 lg:pt-8">
+                <!-- Header with Search & Filters -->
                 <div class="mb-6 sm:mb-8">
-                    <h1 class="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent mb-1 sm:mb-2 truncate">Riwayat Booking Anda</h1>
-                    <p class="text-gray-600 text-sm sm:text-base">Pantau semua booking Anda dengan mudah</p>
+                    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+                        <div>
+                            <h1 class="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent mb-1 sm:mb-2">📋 Riwayat Pesanan</h1>
+                            <p class="text-gray-600 text-sm sm:text-base">Pantau dan kelola semua pesanan Anda dengan mudah</p>
+                        </div>
+                        
+                        <!-- Search Box -->
+                        <div class="search-box w-full lg:w-96">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="searchHistory" placeholder="Cari nama kos atau kamar..." class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none">
+                        </div>
+                    </div>
+                    
+                    <!-- Filter Pills -->
+                    <div class="flex flex-wrap gap-3 mb-8">
+                        <button class="filter-pill active" data-filter="all">
+                            <i class="fas fa-th"></i>Semua
+                        </button>
+                        <button class="filter-pill" data-filter="aktif">
+                            <i class="fas fa-check-circle"></i>Aktif
+                        </button>
+                        <button class="filter-pill" data-filter="pending">
+                            <i class="fas fa-clock"></i>Pending
+                        </button>
+                        <button class="filter-pill" data-filter="menunggu_pembayaran">
+                            <i class="fas fa-credit-card"></i>Menunggu Bayar
+                        </button>
+                        <button class="filter-pill" data-filter="selesai">
+                            <i class="fas fa-flag-checkered"></i>Selesai
+                        </button>
+                        <button class="filter-pill" data-filter="ditolak">
+                            <i class="fas fa-ban"></i>Ditolak
+                        </button>
+                        <button class="filter-pill" data-filter="batal">
+                            <i class="fas fa-times-circle"></i>Dibatalkan
+                        </button>
+                    </div>
                 </div>
 
-                <!-- Booking Aktif -->
-                <div class="mb-8 sm:mb-10">
-                    <div class="flex items-center mb-4 sm:mb-6 section-header">
-                        <div class="w-10 h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-xl flex items-center justify-center mr-3 shadow-md flex-shrink-0">
-                            <i class="fas fa-check-circle text-xl text-white"></i>
-                        </div>
-                        <h2 class="text-2xl font-bold text-gray-800">Booking Aktif</h2>
-                        <?php if (!empty($booking_history['aktif'])): ?>
-                            <span class="ml-3 bg-green-100 text-green-700 text-sm font-semibold px-3 py-1 rounded-full"><?php echo count($booking_history['aktif']); ?></span>
-                        <?php endif; ?>
-                    </div>
-                    <?php if (!empty($booking_history['aktif'])): ?>
-                        <div class="grid gap-4">
-                        <?php foreach ($booking_history['aktif'] as $booking): ?>
-                            <div class="booking-card bg-white p-6 rounded-xl shadow-md border-l-4 border-green-500 hover:shadow-lg transition-all">
-                                <div class="flex justify-between items-start mb-4">
-                                    <div class="flex-grow">
-                                        <div class="flex items-start space-x-3">
-                                            <div class="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                                                <i class="fas fa-home text-green-600 text-xl"></i>
+
+                <?php 
+                // Combine all bookings into one array with status info
+                $all_bookings = [];
+                
+                foreach ($booking_history['aktif'] as $booking) {
+                    $booking['display_status'] = 'aktif';
+                    $booking['status_class'] = 'aktif';
+                    $booking['status_label'] = 'Aktif & Dibayar';
+                    $booking['status_icon'] = 'fa-check-circle';
+                    $booking['icon_bg'] = 'from-green-400 to-green-600';
+                    $booking['action_type'] = 'complaint';
+                    $all_bookings[] = $booking;
+                }
+                
+                foreach ($booking_history['menunggu_proses'] as $booking) {
+                    $booking['display_status'] = 'pending';
+                    $booking['status_class'] = 'pending';
+                    $booking['status_label'] = 'Menunggu Konfirmasi';
+                    $booking['status_icon'] = 'fa-clock';
+                    $booking['icon_bg'] = 'from-yellow-400 to-yellow-600';
+                    $booking['action_type'] = 'cancel';
+                    $all_bookings[] = $booking;
+                }
+                
+                foreach ($booking_history['menunggu_pembayaran'] as $booking) {
+                    $booking['display_status'] = 'menunggu_pembayaran';
+                    $booking['status_class'] = 'menunggu_pembayaran';
+                    $booking['status_label'] = 'Menunggu Pembayaran';
+                    $booking['status_icon'] = 'fa-credit-card';
+                    $booking['icon_bg'] = 'from-blue-400 to-blue-600';
+                    $booking['action_type'] = 'payment';
+                    $all_bookings[] = $booking;
+                }
+                
+                foreach ($booking_history['selesai'] as $booking) {
+                    $booking['display_status'] = 'selesai';
+                    $booking['status_class'] = 'selesai';
+                    $booking['status_label'] = 'Selesai';
+                    $booking['status_icon'] = 'fa-flag-checkered';
+                    $booking['icon_bg'] = 'from-gray-400 to-gray-600';
+                    $booking['action_type'] = 'none';
+                    $all_bookings[] = $booking;
+                }
+                
+                foreach ($booking_history['ditolak'] as $booking) {
+                    $booking['display_status'] = 'ditolak';
+                    $booking['status_class'] = 'ditolak';
+                    $booking['status_label'] = 'Ditolak';
+                    $booking['status_icon'] = 'fa-ban';
+                    $booking['icon_bg'] = 'from-red-400 to-red-600';
+                    $booking['action_type'] = 'none';
+                    $all_bookings[] = $booking;
+                }
+                
+                foreach ($booking_history['batal'] as $booking) {
+                    $booking['display_status'] = 'batal';
+                    $booking['status_class'] = 'batal';
+                    $booking['status_label'] = 'Dibatalkan';
+                    $booking['status_icon'] = 'fa-times-circle';
+                    $booking['icon_bg'] = 'from-orange-400 to-orange-600';
+                    $booking['action_type'] = 'none';
+                    $all_bookings[] = $booking;
+                }
+                
+                // Sort by date (newest first)
+                usort($all_bookings, function($a, $b) {
+                    return strtotime($b['tanggal_booking']) - strtotime($a['tanggal_booking']);
+                });
+                ?>
+                
+                <!-- All Orders Grid -->
+                <div id="allOrdersContainer">
+                    <?php if (!empty($all_bookings)): ?>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="ordersGrid">
+                        <?php foreach ($all_bookings as $booking): ?>
+                            <div class="history-card bg-white rounded-xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden group border border-gray-100 relative" data-status="<?php echo $booking['display_status']; ?>">
+                                <!-- Status Overlay (Whole Card Border/Effect based on status) -->
+                                <div class="absolute top-0 left-0 w-1 h-full bg-gradient-to-b <?php echo $booking['icon_bg']; ?>"></div>
+
+                                <!-- Image Section -->
+                                <div class="relative h-48 bg-gray-200 overflow-hidden group-hover:opacity-90 transition-opacity">
+                                    <?php 
+                                        $gambar = !empty($booking['gambar']) ? $booking['gambar'] : ($booking['room_foto'] ?? '');
+                                        $is_url = strpos($gambar, 'http') === 0;
+                                        $is_room = (!empty($booking['room_foto']) && $gambar === $booking['room_foto'] && empty($booking['gambar']));
+                                        $folder = $is_room ? '../uploads/rooms/' : '../uploads/kost/';
+                                        $img_src = $is_url ? $gambar : $folder . $gambar;
+                                        
+                                        if (!empty($gambar) && ($is_url || file_exists(__DIR__ . '/../' . ltrim($folder, '../') . $gambar))): 
+                                    ?>
+                                        <img src="<?php echo htmlspecialchars($img_src); ?>" 
+                                             alt="<?php echo htmlspecialchars($booking['nama_kost']); ?>" 
+                                             class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500">
+                                        <?php if ($is_room): ?>
+                                            <div class="absolute bottom-2 left-2 bg-blue-600/80 backdrop-blur-md text-white text-[10px] px-2 py-1 rounded-md font-medium z-10">
+                                                <i class="fas fa-bed mr-1"></i>Foto Kamar
                                             </div>
-                                            <div>
-                                                <p class="font-bold text-xl text-gray-900 mb-1"><?php echo htmlspecialchars($booking['nama_kost']); ?></p>
-                                                <p class="text-purple-600 font-semibold"><?php echo htmlspecialchars($booking['nama_kamar']); ?></p>
-                                                <p class="text-sm text-gray-500 mt-2 flex items-center">
-                                                    <i class="fas fa-calendar-alt mr-2"></i>
-                                                    Dibooking pada: <?php echo date('d M Y', strtotime($booking['tanggal_booking'])); ?>
-                                                </p>
-                                            </div>
+                                        <?php endif; ?>
+                                    <?php else: ?>
+                                        <div class="w-full h-full flex items-center justify-center bg-gradient-to-br <?php echo $booking['icon_bg']; ?>">
+                                            <i class="fas fa-home text-white text-6xl opacity-50"></i>
+                                        </div>
+                                    <?php endif; ?>
+                                    
+                                    <!-- Badges Overlay -->
+                                    <div class="absolute top-3 left-3 flex flex-col gap-2">
+                                        <span class="status-badge status-<?php echo $booking['status_class']; ?> shadow-lg backdrop-blur-md bg-white/90">
+                                            <i class="fas <?php echo $booking['status_icon']; ?>"></i><?php echo $booking['status_label']; ?>
+                                        </span>
+                                    </div>
+                                    
+                                    <div class="absolute bottom-3 right-3 bg-white/95 backdrop-blur-sm px-3 py-1.5 rounded-lg shadow-lg text-sm font-bold text-gray-800">
+                                        Rp <?php echo number_format($booking['harga'], 0, ',', '.'); ?>/bln
+                                    </div>
+                                </div>
+
+                                <!-- Content Section -->
+                                <div class="p-5">
+                                    <div class="flex justify-between items-start mb-2">
+                                        <div>
+                                            <h3 class="text-xl font-bold text-gray-800 line-clamp-1 mb-1">
+                                                <?php echo htmlspecialchars($booking['nama_kost']); ?>
+                                            </h3>
+                                            <p class="text-purple-600 font-semibold text-sm">
+                                                <i class="fas fa-bed mr-1"></i><?php echo htmlspecialchars($booking['nama_kamar']); ?>
+                                            </p>
+                                        </div>
+                                        <div class="text-right">
+                                            <p class="text-xs text-gray-500">Tanggal Booking</p>
+                                            <p class="text-sm font-semibold text-gray-700">
+                                                <?php echo date('d M Y', strtotime($booking['tanggal_booking'])); ?>
+                                            </p>
                                         </div>
                                     </div>
-                                    <span class="status-badge status-dibayar flex items-center">
-                                        <i class="fas fa-check-circle mr-1"></i>Aktif
-                                    </span>
-                                </div>
-                                <div class="mt-4 pt-4 border-t border-gray-100 flex justify-end">
-                                    <a href="complaint.php" class="bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center group">
-                                        <i class="fas fa-exclamation-circle mr-2 group-hover:scale-110 transition-transform"></i>Ajukan Keluhan
-                                    </a>
+                                    
+                                    <div class="mb-3 text-sm text-gray-600 flex items-start gap-2">
+                                        <i class="fas fa-map-marker-alt text-red-500 flex-shrink-0 mt-1"></i>
+                                        <p class="line-clamp-2"><?php echo htmlspecialchars($booking['alamat']); ?></p>
+                                    </div>
+
+                                    <div class="mb-4 text-xs font-medium text-gray-500 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                                        <i class="fas fa-user-circle mr-1 text-gray-400"></i>Pemilik: <span class="text-gray-700"><?php echo htmlspecialchars($booking['nama_pemilik'] ?? '-'); ?></span>
+                                    </div>
+
+                                    <?php if(!empty($booking['fasilitas'])): ?>
+                                    <div class="mb-4">
+                                        <div class="flex flex-wrap gap-1.5">
+                                            <?php 
+                                            $fasilitas_list = array_filter(array_map('trim', explode(',', $booking['fasilitas'])));
+                                            foreach(array_slice($fasilitas_list, 0, 3) as $fasilitas): 
+                                            ?>
+                                            <span class="bg-blue-50 text-blue-600 px-2 py-1 rounded-md text-xs font-medium border border-blue-100">
+                                                <?php echo htmlspecialchars($fasilitas); ?>
+                                            </span>
+                                            <?php endforeach; ?>
+                                            <?php if(count($fasilitas_list) > 3): ?>
+                                            <span class="text-xs text-gray-400 self-center">+<?php echo count($fasilitas_list) - 3; ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                    <?php endif; ?>
+
+                                    <!-- Action Buttons -->
+                                    <div class="pt-4 border-t border-gray-100 mt-auto">
+                                        <?php if ($booking['action_type'] === 'complaint'): ?>
+                                            <a href="complaint.php" class="w-full bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center group">
+                                                <i class="fas fa-exclamation-circle mr-2"></i>Ajukan Keluhan
+                                            </a>
+                                        <?php elseif ($booking['action_type'] === 'cancel'): ?>
+                                            <button onclick="cancelBooking(<?php echo $booking['id_booking']; ?>)" class="w-full bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center group border border-red-200">
+                                                <i class="fas fa-times-circle mr-2"></i>Batalkan Pesanan
+                                            </button>
+                                        <?php elseif ($booking['action_type'] === 'payment'): ?>
+                                            <div class="flex flex-col gap-2">
+                                                <a href="payment.php?booking_id=<?php echo $booking['id_booking']; ?>" class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 px-4 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md hover:shadow-lg flex items-center justify-center">
+                                                    <i class="fas fa-credit-card mr-2"></i>Bayar Sekarang
+                                                </a>
+                                                <button onclick="cancelBooking(<?php echo $booking['id_booking']; ?>)" class="w-full text-gray-400 hover:text-red-500 text-xs font-medium py-1 transition-colors">
+                                                    Batalkan Pesanan Ini
+                                                </button>
+                                            </div>
+                                        <?php else: ?>
+                                            <button disabled class="w-full bg-gray-50 text-gray-400 px-4 py-2.5 rounded-xl text-sm font-medium cursor-not-allowed flex items-center justify-center">
+                                                <i class="fas fa-check-circle mr-2"></i><?php echo $booking['status_label']; ?>
+                                            </button>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
                             </div>
                         <?php endforeach; ?>
                         </div>
                     <?php else: ?>
-                        <div class="bg-gray-50 border-2 border-dashed border-gray-200 rounded-lg sm:rounded-xl p-6 sm:p-8 text-center">
-                            <i class="fas fa-calendar-times text-4xl sm:text-5xl text-gray-300 mb-2 sm:mb-3"></i>
-                            <p class="text-gray-500 text-sm sm:text-lg">Tidak ada booking yang sedang aktif.</p>
-                        </div>
-                    <?php endif; ?>
-                </div>
-
-                <!-- Booking Pending -->
-                <div class="mb-8 sm:mb-10">
-                    <div class="flex items-center mb-4 sm:mb-6 section-header">
-                        <div class="w-10 h-10 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-xl flex items-center justify-center mr-3 shadow-md flex-shrink-0">
-                            <i class="fas fa-hourglass-half text-xl text-white"></i>
-                        </div>
-                        <h2 class="text-2xl font-bold text-gray-800">Menunggu Proses</h2>
-                        <?php if (!empty($booking_history['menunggu_proses']) || !empty($booking_history['menunggu_pembayaran'])): ?>
-                            <span class="ml-3 bg-yellow-100 text-yellow-700 text-sm font-semibold px-3 py-1 rounded-full">
-                                <?php echo count($booking_history['menunggu_proses']) + count($booking_history['menunggu_pembayaran']); ?>
-                            </span>
-                        <?php endif; ?>
-                    </div>
-                    <?php if (!empty($booking_history['menunggu_proses']) || !empty($booking_history['menunggu_pembayaran'])): ?>
-                        <div class="grid gap-4">
-                        <?php foreach ($booking_history['menunggu_proses'] as $booking): ?> 
-                            <div class="booking-card bg-white p-6 rounded-xl shadow-md border-l-4 border-yellow-500 hover:shadow-lg transition-all">
-                                <div class="flex justify-between items-start mb-4">
-                                    <div class="flex-grow">
-                                        <div class="flex items-start space-x-3">
-                                            <div class="w-12 h-12 bg-yellow-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                                                <i class="fas fa-clock text-yellow-600 text-xl"></i>
-                                            </div>
-                                            <div>
-                                                <p class="font-bold text-xl text-gray-900 mb-1"><?php echo htmlspecialchars($booking['nama_kost']); ?></p>
-                                                <p class="text-purple-600 font-semibold"><?php echo htmlspecialchars($booking['nama_kamar']); ?></p>
-                                                <p class="text-sm text-gray-500 mt-2 flex items-center">
-                                                    <i class="fas fa-calendar-alt mr-2"></i>
-                                                    Dibooking pada: <?php echo date('d M Y', strtotime($booking['tanggal_booking'])); ?>
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <span class="status-badge status-pending flex items-center">
-                                        <i class="fas fa-clock mr-1"></i>Menunggu Konfirmasi
-                                    </span>
-                                </div>
-                                <div class="mt-4 pt-4 border-t border-gray-100 flex justify-end items-center">
-                                    <button onclick="cancelBooking(<?php echo $booking['id_booking']; ?>)" class="bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center group">
-                                        <i class="fas fa-times-circle mr-2 group-hover:scale-110 transition-transform"></i>Batalkan Pesanan
-                                    </button>
-                                </div>
+                        <div class="empty-state">
+                            <div class="empty-state-icon">
+                                <i class="fas fa-inbox"></i>
                             </div>
-                        <?php endforeach; ?> 
-                        <?php foreach ($booking_history['menunggu_pembayaran'] as $booking): ?>
-                            <div class="booking-card bg-white p-6 rounded-xl shadow-md border-l-4 border-blue-500 hover:shadow-lg transition-all">
-                                <div class="flex justify-between items-start mb-4">
-                                    <div class="flex-grow">
-                                        <div class="flex items-start space-x-3">
-                                            <div class="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                                                <i class="fas fa-wallet text-blue-600 text-xl"></i>
-                                            </div>
-                                            <div>
-                                                <p class="font-bold text-xl text-gray-900 mb-1"><?php echo htmlspecialchars($booking['nama_kost']); ?></p>
-                                                <p class="text-purple-600 font-semibold"><?php echo htmlspecialchars($booking['nama_kamar']); ?></p>
-                                                <p class="text-sm text-gray-500 mt-2 flex items-center">
-                                                    <i class="fas fa-calendar-alt mr-2"></i>
-                                                    Dibooking pada: <?php echo date('d M Y', strtotime($booking['tanggal_booking'])); ?>
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <span class="status-badge status-menunggu_pembayaran flex items-center">
-                                        <i class="fas fa-credit-card mr-1"></i>Menunggu Pembayaran
-                                    </span>
-                                </div>
-                                <div class="mt-4 pt-4 border-t border-gray-100 flex justify-end items-center gap-3">
-                                    <button onclick="cancelBooking(<?php echo $booking['id_booking']; ?>)" class="bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center group">
-                                        <i class="fas fa-times-circle mr-2 group-hover:scale-110 transition-transform"></i>Batalkan
-                                    </button>
-                                    <a href="payment.php?booking_id=<?php echo $booking['id_booking']; ?>" class="bg-purple-600 text-white hover:bg-purple-700 px-4 py-2 rounded-lg font-semibold text-center transition-colors flex items-center justify-center group">
-                                        <i class="fas fa-credit-card mr-2 group-hover:scale-110 transition-transform"></i>Bayar
-                                    </a>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                        </div>
-                    <?php else: ?>
-                        <div class="bg-gray-50 border-2 border-dashed border-gray-200 rounded-lg sm:rounded-xl p-6 sm:p-8 text-center">
-                            <i class="fas fa-inbox text-4xl sm:text-5xl text-gray-300 mb-2 sm:mb-3"></i>
-                            <p class="text-gray-500 text-sm sm:text-lg">Tidak ada booking yang menunggu proses.</p>
-                        </div>
-                    <?php endif; ?>
-                </div>
-
-                <!-- Riwayat Lainnya -->
-                <div class="mb-8 sm:mb-10">
-                    <div class="flex items-center mb-4 sm:mb-6 section-header">
-                        <div class="w-10 h-10 bg-gradient-to-br from-gray-400 to-gray-600 rounded-xl flex items-center justify-center mr-3 shadow-md flex-shrink-0">
-                            <i class="fas fa-archive text-xl text-white"></i>
-                        </div>
-                        <h2 class="text-2xl font-bold text-gray-800">Riwayat Lainnya</h2>
-                        <?php if (!empty($booking_history['selesai']) || !empty($booking_history['ditolak']) || !empty($booking_history['batal'])): ?>
-                            <span class="ml-3 bg-gray-100 text-gray-700 text-sm font-semibold px-3 py-1 rounded-full">
-                                <?php echo count($booking_history['selesai']) + count($booking_history['ditolak']) + count($booking_history['batal']); ?>
-                            </span>
-                        <?php endif; ?>
-                    </div>
-                    <?php if (!empty($booking_history['selesai']) || !empty($booking_history['ditolak']) || !empty($booking_history['batal'])): ?>
-                        <div class="grid gap-4">
-                        <?php foreach ($booking_history['selesai'] as $booking): ?> 
-                            <div class="booking-card bg-white p-5 rounded-xl shadow-sm border-l-4 border-gray-400 opacity-80 hover:opacity-100 transition-all">
-                                <div class="flex justify-between items-center">
-                                    <div class="flex items-center space-x-3">
-                                        <div class="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                                            <i class="fas fa-check-double text-gray-600"></i>
-                                        </div>
-                                        <div>
-                                            <p class="font-bold text-lg text-gray-700"><?php echo htmlspecialchars($booking['nama_kost']); ?></p>
-                                            <p class="text-sm text-gray-500 flex items-center mt-1">
-                                                <i class="fas fa-door-closed mr-2"></i>
-                                                <?php echo htmlspecialchars($booking['nama_kamar']); ?>
-                                            </p>
-                                            <p class="text-xs text-gray-400 mt-1">Selesai pada: <?php echo date('d M Y', strtotime($booking['tanggal_booking'])); ?></p>
-                                        </div>
-                                    </div>
-                                    <span class="status-badge status-selesai flex items-center">
-                                        <i class="fas fa-flag-checkered mr-1"></i>Selesai
-                                    </span>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                        <?php foreach ($booking_history['ditolak'] as $booking): ?> 
-                            <div class="booking-card bg-white p-5 rounded-xl shadow-sm border-l-4 border-red-500 opacity-80 hover:opacity-100 transition-all">
-                                <div class="flex justify-between items-center">
-                                    <div class="flex items-center space-x-3">
-                                        <div class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-                                            <i class="fas fa-times text-red-600"></i>
-                                        </div>
-                                        <div>
-                                            <p class="font-bold text-lg text-gray-700"><?php echo htmlspecialchars($booking['nama_kost']); ?></p>
-                                            <p class="text-sm text-gray-500 flex items-center mt-1">
-                                                <i class="fas fa-door-closed mr-2"></i>
-                                                <?php echo htmlspecialchars($booking['nama_kamar']); ?>
-                                            </p>
-                                            <p class="text-xs text-gray-400 mt-1">Ditolak pada: <?php echo date('d M Y', strtotime($booking['tanggal_booking'])); ?></p>
-                                        </div>
-                                    </div>
-                                    <span class="status-badge status-ditolak flex items-center">
-                                        <i class="fas fa-ban mr-1"></i>Ditolak
-                                    </span>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                        <?php foreach ($booking_history['batal'] as $booking): ?> 
-                            <div class="booking-card bg-white p-5 rounded-xl shadow-sm border-l-4 border-orange-500 opacity-80 hover:opacity-100 transition-all">
-                                <div class="flex justify-between items-center">
-                                    <div class="flex items-center space-x-3">
-                                        <div class="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                                            <i class="fas fa-ban text-orange-600"></i>
-                                        </div>
-                                        <div>
-                                            <p class="font-bold text-lg text-gray-700"><?php echo htmlspecialchars($booking['nama_kost']); ?></p>
-                                            <p class="text-sm text-gray-500 flex items-center mt-1">
-                                                <i class="fas fa-door-closed mr-2"></i>
-                                                <?php echo htmlspecialchars($booking['nama_kamar']); ?>
-                                            </p>
-                                            <p class="text-xs text-gray-400 mt-1">Dibatalkan pada: <?php echo date('d M Y', strtotime($booking['tanggal_booking'])); ?></p>
-                                        </div>
-                                    </div>
-                                    <span class="status-badge status-batal flex items-center">
-                                        <i class="fas fa-times-circle mr-1"></i>Dibatalkan
-                                    </span>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                        </div>
-                    <?php else: ?>
-                        <div class="bg-gray-50 border-2 border-dashed border-gray-200 rounded-lg sm:rounded-xl p-6 sm:p-8 text-center">
-                            <i class="fas fa-history text-4xl sm:text-5xl text-gray-300 mb-2 sm:mb-3"></i>
-                            <p class="text-gray-500 text-sm sm:text-lg">Tidak ada riwayat booking lainnya.</p>
+                            <h3 class="text-xl font-bold text-gray-700 mb-2">Belum Ada Riwayat Pesanan</h3>
+                            <p class="text-gray-500 mb-4">Anda belum memiliki riwayat pesanan. Mulai cari kos impian Anda sekarang!</p>
+                            <a href="../dashboard/dashboarduser.php#pilihan-kos" class="inline-flex items-center bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl">
+                                <i class="fas fa-search mr-2"></i>Cari Kos Sekarang
+                            </a>
                         </div>
                     <?php endif; ?>
                 </div>
@@ -1261,9 +1547,9 @@ $conn->close();
 
         // Setup button event listeners when DOM is ready
         document.addEventListener('DOMContentLoaded', function() {
-            const profileBtn = document.getElementById('mobileProfileBtn');
-            const notifBtn = document.getElementById('mobileNotifBtn');
-            const logoutBtn = document.getElementById('mobileLogoutBtn');
+            const profileBtn = document.getElementById('drawerProfileBtn');
+            const notifBtn = document.getElementById('drawerNotifBtn');
+            const logoutBtn = document.getElementById('drawerLogoutBtn');
             
             if (profileBtn) {
                 profileBtn.addEventListener('mousedown', function(e) {
@@ -1386,7 +1672,17 @@ $conn->close();
                                                 <span class="text-xs text-gray-400 flex items-center">
                                                     <i class="far fa-clock mr-1"></i>${notif.created_at}
                                                 </span>
-                                                ${notif.link ? `<a href="${notif.link}" class="text-xs text-purple-600 hover:text-purple-700 font-semibold">Lihat Detail →</a>` : ''}
+                                                ${(() => {
+                                                    if (!notif.link) return '';
+                                                    let cleanLink = notif.link;
+                                                    // Sanitize link for virtual host
+                                                    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                                                        if (cleanLink.startsWith('/KosConnect/')) {
+                                                            cleanLink = cleanLink.replace('/KosConnect/', '/');
+                                                        }
+                                                    }
+                                                    return `<a href="${cleanLink}" class="text-xs text-purple-600 hover:text-purple-700 font-semibold">Lihat Detail →</a>`;
+                                                })()}
                                             </div>
                                         </div>
                                     </div>
@@ -1520,6 +1816,158 @@ $conn->close();
                 }
             });
         }
+
+        
+        // Filter and Search Functionality for Order History
+        document.addEventListener('DOMContentLoaded', function() {
+            const filterPills = document.querySelectorAll('.filter-pill');
+            const searchInput = document.getElementById('searchHistory');
+            const historyCards = document.querySelectorAll('.history-card');
+            
+            console.log('Filter initialized:', {
+                pills: filterPills.length,
+                cards: historyCards.length,
+                searchInput: searchInput ? 'found' : 'not found'
+            });
+            
+            // Filter Pills Click Handler
+            filterPills.forEach(pill => {
+                pill.addEventListener('click', function() {
+                    console.log('Filter clicked:', this.getAttribute('data-filter'));
+                    
+                    // Remove active class from all pills
+                    filterPills.forEach(p => p.classList.remove('active'));
+                    // Add active class to clicked pill
+                    this.classList.add('active');
+                    
+                    const filter = this.getAttribute('data-filter');
+                    const searchTerm = searchInput ? searchInput.value : '';
+                    filterHistory(filter, searchTerm);
+                });
+            });
+            
+            // Search Input Handler
+            if (searchInput) {
+                searchInput.addEventListener('input', function() {
+                    const activeFilter = document.querySelector('.filter-pill.active');
+                    const filter = activeFilter ? activeFilter.getAttribute('data-filter') : 'all';
+                    filterHistory(filter, this.value);
+                });
+            }
+            
+            function filterHistory(statusFilter, searchTerm) {
+                searchTerm = searchTerm ? searchTerm.toLowerCase().trim() : '';
+                
+                console.log('Filtering:', { statusFilter, searchTerm });
+                
+                let visibleCount = 0;
+                
+                // Filter each card directly
+                historyCards.forEach(card => {
+                    const cardStatus = card.getAttribute('data-status');
+                    const cardText = card.textContent.toLowerCase();
+                    
+                    // Check if card matches filter and search
+                    const matchesFilter = statusFilter === 'all' || cardStatus === statusFilter;
+                    const matchesSearch = searchTerm === '' || cardText.includes(searchTerm);
+                    
+                    if (matchesFilter && matchesSearch) {
+                        card.style.display = '';
+                        visibleCount++;
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+                
+                console.log('Visible cards:', visibleCount);
+                
+                // Show/hide empty state with custom messages
+                const ordersGrid = document.getElementById('ordersGrid');
+                const allOrdersContainer = document.getElementById('allOrdersContainer');
+                let emptyState = allOrdersContainer ? allOrdersContainer.querySelector('.empty-state') : null;
+                
+                // Create empty state if it doesn't exist
+                if (!emptyState && allOrdersContainer) {
+                    emptyState = document.createElement('div');
+                    emptyState.className = 'empty-state';
+                    emptyState.style.display = 'none';
+                    emptyState.innerHTML = `
+                        <div class="empty-state-icon">
+                            <i class="fas fa-inbox"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-gray-700 mb-2">Tidak Ada Hasil</h3>
+                        <p class="text-gray-500 mb-4">Tidak ada pesanan yang sesuai</p>
+                    `;
+                    allOrdersContainer.appendChild(emptyState);
+                }
+                
+                if (ordersGrid && emptyState) {
+                    if (visibleCount === 0) {
+                        ordersGrid.style.display = 'none';
+                        emptyState.style.display = 'block';
+                        
+                        // Custom messages for each status
+                        const emptyMessages = {
+                            'all': {
+                                icon: 'fa-inbox',
+                                title: 'Tidak Ada Hasil',
+                                message: searchTerm ? `Tidak ditemukan pesanan dengan pencarian "${searchTerm}"` : 'Tidak ada pesanan yang sesuai dengan filter'
+                            },
+                            'aktif': {
+                                icon: 'fa-calendar-times',
+                                title: 'Tidak Ada Booking Aktif',
+                                message: searchTerm ? `Tidak ditemukan booking aktif dengan pencarian "${searchTerm}"` : 'Anda belum memiliki booking yang sedang aktif saat ini'
+                            },
+                            'pending': {
+                                icon: 'fa-hourglass-half',
+                                title: 'Tidak Ada Pesanan Pending',
+                                message: searchTerm ? `Tidak ditemukan pesanan pending dengan pencarian "${searchTerm}"` : 'Tidak ada pesanan yang menunggu konfirmasi'
+                            },
+                            'menunggu_pembayaran': {
+                                icon: 'fa-credit-card',
+                                title: 'Tidak Ada Pesanan Menunggu Pembayaran',
+                                message: searchTerm ? `Tidak ditemukan pesanan menunggu pembayaran dengan pencarian "${searchTerm}"` : 'Tidak ada pesanan yang menunggu pembayaran'
+                            },
+                            'selesai': {
+                                icon: 'fa-flag-checkered',
+                                title: 'Tidak Ada Pesanan Selesai',
+                                message: searchTerm ? `Tidak ditemukan pesanan selesai dengan pencarian "${searchTerm}"` : 'Belum ada pesanan yang selesai'
+                            },
+                            'ditolak': {
+                                icon: 'fa-ban',
+                                title: 'Tidak Ada Pesanan Ditolak',
+                                message: searchTerm ? `Tidak ditemukan pesanan ditolak dengan pencarian "${searchTerm}"` : 'Tidak ada pesanan yang ditolak'
+                            },
+                            'batal': {
+                                icon: 'fa-times-circle',
+                                title: 'Tidak Ada Pesanan Dibatalkan',
+                                message: searchTerm ? `Tidak ditemukan pesanan dibatalkan dengan pencarian "${searchTerm}"` : 'Tidak ada pesanan yang dibatalkan'
+                            }
+                        };
+                        
+                        const emptyData = emptyMessages[statusFilter] || emptyMessages['all'];
+                        
+                        // Update empty state content
+                        const iconElement = emptyState.querySelector('.empty-state-icon i');
+                        const titleElement = emptyState.querySelector('h3');
+                        const messageElement = emptyState.querySelector('p');
+                        
+                        if (iconElement) {
+                            iconElement.className = `fas ${emptyData.icon}`;
+                        }
+                        if (titleElement) {
+                            titleElement.textContent = emptyData.title;
+                        }
+                        if (messageElement) {
+                            messageElement.textContent = emptyData.message;
+                        }
+                    } else {
+                        ordersGrid.style.display = '';
+                        if (emptyState) emptyState.style.display = 'none';
+                    }
+                }
+            }
+        });
 
         // Auto hide payment success notification
         setTimeout(() => {

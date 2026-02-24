@@ -1,9 +1,14 @@
 <?php
+ob_start();
+error_reporting(0);
+ini_set('display_errors', 0);
+
 session_start();
-ob_start(); // Mulai output buffering untuk menangkap output yang tidak diinginkan
 header('Content-Type: application/json');
 
 include '../config/db.php';
+require_once __DIR__ . '/../config/cloudinary.php'; // Restore configuration!
+use Cloudinary\Api\Upload\UploadApi;
 
 // Ensure `foto_profil` column exists to prevent SQL errors when selecting/updating profile photo
 try {
@@ -121,20 +126,30 @@ if ($action === 'update_profile') {
                     unlink($upload_dir . $old_photo_filename);
                 }
 
-                // Unggah foto baru
-                $new_photo_name = uniqid('user_', true) . '.' . pathinfo($file['name'], PATHINFO_EXTENSION);
-                if (move_uploaded_file($file['tmp_name'], $upload_dir . $new_photo_name)) {
+                // Unggah foto baru ke Cloudinary
+                try {
+                    $uploadApi = new UploadApi();
+                    $uploadResult = $uploadApi->upload($file['tmp_name'], [
+                        'folder' => 'kosconnect/profiles', 
+                        'public_id' => uniqid('owner_'),
+                        'resource_type' => 'image'
+                    ]);
+                    
+                    $new_photo_url = $uploadResult['secure_url'];
+
                     $stmt_update = $conn->prepare("UPDATE user SET foto_profil = ? WHERE id_user = ?");
-                    $stmt_update->bind_param("si", $new_photo_name, $id_pemilik);
+                    $stmt_update->bind_param("si", $new_photo_url, $id_pemilik);
+                    
                     if ($stmt_update->execute()) {
-                        $_SESSION['foto_profil'] = $new_photo_name;
-                        $response = ['status' => 'success', 'message' => 'Foto profil berhasil diperbarui.', 'new_photo' => $new_photo_name];
+                        $_SESSION['foto_profil'] = $new_photo_url;
+                        $response = ['status' => 'success', 'message' => 'Foto profil berhasil diperbarui.', 'new_photo' => $new_photo_url];
                     } else {
-                        $response['message'] = 'Gagal menyimpan nama file foto ke database.';
+                        $response['message'] = 'Gagal menyimpan URL foto ke database.';
                     }
                     $stmt_update->close();
-                } else {
-                    $response['message'] = 'Gagal memindahkan file yang diunggah.';
+                    
+                } catch (Exception $e) {
+                    $response['message'] = 'Gagal mengunggah foto ke Cloudinary: ' . $e->getMessage();
                 }
             }
         }
@@ -147,6 +162,7 @@ if ($action === 'update_profile') {
 }
 
 $conn->close();
-ob_end_clean(); // Hapus semua output yang mungkin ada di buffer
+ob_end_clean(); // Hapus semua output yang mungkin ada di buff$conn->close();
+ob_end_clean();
 echo json_encode($response);
 ?>

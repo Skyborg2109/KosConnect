@@ -10,6 +10,8 @@ session_start();
 header('Content-Type: application/json; charset=utf-8');
 
 include '../config/db.php';
+require_once __DIR__ . '/../config/cloudinary.php';
+use Cloudinary\Api\Upload\UploadApi;
 
 // Response template
 $response = ['success' => false, 'message' => 'Terjadi kesalahan yang tidak diketahui.', 'data' => null];
@@ -109,12 +111,18 @@ try {
                     break;
                 }
 
-                $gambar_nama = 'kost_' . time() . '_' . uniqid() . '.' . $file_ext;
-                $gambar_path = $upload_dir . $gambar_nama;
-
-                if (!move_uploaded_file($file['tmp_name'], $gambar_path)) {
-                    $response['message'] = 'Gagal mengupload file.';
-                    break;
+                try {
+                    $uploadApi = new UploadApi();
+                    $uploadResult = $uploadApi->upload($file['tmp_name'], [
+                        'folder' => 'kosconnect/kosts', 
+                        'public_id' => uniqid('kost_'),
+                        'resource_type' => 'image'
+                    ]);
+                    $gambar_nama = $uploadResult['secure_url']; // Save URL
+                } catch (Exception $e) {
+                    $response['message'] = 'Gagal mengunggah gambar utama ke Cloudinary: ' . $e->getMessage();
+                    echo json_encode($response);
+                    exit();
                 }
 
                 // Delete old image if updating and new image uploaded

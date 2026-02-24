@@ -84,6 +84,25 @@ try {
     $stmt_notif_penyewa->bind_param("iss", $id_penyewa, $pesan_notif_penyewa, $link_notif_penyewa);
     $stmt_notif_penyewa->execute();
 
+    // 9. [NEW] Buat notifikasi untuk Admin (All Admins)
+    $stmt_admin = $conn->prepare("SELECT id_user FROM user WHERE role = 'admin'");
+    $stmt_admin->execute();
+    $res_admin = $stmt_admin->get_result();
+    
+    $pesan_admin = "Booking baru: {$nama_kamar} di {$nama_kost} oleh user ID {$id_penyewa}.";
+    $link_admin = '/KosConnect/dashboard/dashboardadmin.php?module=admin_manage_transactions';
+    
+    $stmt_notif_admin = $conn->prepare("INSERT INTO notifications (id_user, pesan, link) VALUES (?, ?, ?)");
+    
+    while ($data_admin = $res_admin->fetch_assoc()) {
+        $id_admin = $data_admin['id_user'];
+        $stmt_notif_admin->bind_param("iss", $id_admin, $pesan_admin, $link_admin);
+        $stmt_notif_admin->execute();
+    }
+    
+    $stmt_notif_admin->close();
+    $stmt_admin->close();
+
     // 7. Jika semua berhasil, commit transaksi
     $conn->commit();
 

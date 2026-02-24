@@ -1,5 +1,4 @@
 <?php
-// Prevent any output except QRIS string
 ob_clean();
 
 /**
@@ -15,7 +14,6 @@ class QRISGenerator {
     private $referenceLabel = 'KosConnect';
 
     public function generateQRIS($amount = 0) {
-        // Buat struktur QRIS yang benar
         $qris = '';
         
         // Format Indicator (Tag 00)
@@ -56,7 +54,7 @@ class QRISGenerator {
         $merchantCityTrimmed = substr($this->merchantCity, 0, 15);
         $qris .= '60' . str_pad(strlen($merchantCityTrimmed), 2, '0', STR_PAD_LEFT) . $merchantCityTrimmed;
         
-        // Reference Label (Tag 05)
+        // Additional Data (Tag 62) - Reference Label
         $qris .= '05' . str_pad(strlen($this->referenceLabel), 2, '0', STR_PAD_LEFT) . $this->referenceLabel;
         
         // Calculate CRC (Tag 63)
@@ -84,7 +82,6 @@ class QRISGenerator {
     }
 }
 
-// Generate dan output QRIS
 header('Content-Type: text/plain; charset=utf-8');
 $generator = new QRISGenerator();
 $amount = isset($_GET['amount']) ? (int)$_GET['amount'] : 0;

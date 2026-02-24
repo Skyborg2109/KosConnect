@@ -64,16 +64,16 @@ $conn->close();
         </div>
     </div>
 
-    <div class="flex justify-between items-center mb-6">
-        <h2 class="text-2xl font-bold text-gray-800 flex items-center">
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 md:gap-0">
+        <h2 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center">
             <i class="fas fa-users mr-3 text-blue-600"></i>
             Manajemen Data Pengguna
         </h2>
-        <div class="flex space-x-3">
-            <button onclick="exportUsers()" class="bg-green-600 text-white px-4 py-3 rounded-xl hover:bg-green-700 transition-all shadow-lg hover:shadow-xl font-semibold">
-                <i class="fas fa-download mr-2"></i>Export CSV
+        <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 w-full md:w-auto">
+            <button onclick="printUsers()" class="w-full sm:w-auto bg-green-600 text-white px-4 py-2 md:py-3 rounded-xl hover:bg-green-700 transition-all shadow-lg hover:shadow-xl font-semibold text-sm md:text-base">
+                <i class="fas fa-print mr-2"></i>Cetak Data
             </button>
-            <button onclick="addUser()" class="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-xl font-semibold">
+            <button onclick="addUser()" class="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 md:px-6 py-2 md:py-3 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-xl font-semibold text-sm md:text-base">
                 <i class="fas fa-plus mr-2"></i>Tambah Pengguna Baru
             </button>
         </div>
@@ -329,7 +329,7 @@ window.addUser = addUser;
 window.closeModal = closeModal;
 window.showModal = showModal;
 window.saveUserChanges = saveUserChanges;
-window.exportUsers = exportUsers;
+window.printUsers = printUsers;
 window.bulkAction = bulkAction;
 window.resetFilters = resetFilters;
 window.filterUsers = filterUsers;
@@ -433,45 +433,81 @@ function resetFilters() {
     filterUsers();
 }
 
-function exportUsers() {
-    // Export users to CSV
-    const rows = document.querySelectorAll('tbody tr:not([style*="display: none"])');
+function printUsers() {
+    // Clone table to prepare for printing
+    const originalTable = document.querySelector('table');
+    const rows = originalTable.querySelectorAll('tbody tr:not([style*="display: none"])');
+    
     if (rows.length === 0) {
-        Swal.fire('Tidak Ada Data', 'Tidak ada pengguna untuk diekspor.', 'warning');
+        Swal.fire('Tidak Ada Data', 'Tidak ada data pengguna untuk dicetak.', 'warning');
         return;
     }
-    
-    let csvContent = '';
-    csvContent += 'Nama Lengkap,Email,Role,Status Aktivasi,Status Akun,Tgl Dibuat\n';
-    
+
+    // Build print content manually to act cleaner than cloning
+    let tableHtml = '<table class="w-full"><thead><tr>';
+    // Headers (Skip Checkbox [0] and Action [last])
+    tableHtml += '<th>No</th><th>Nama Lengkap</th><th>Email</th><th>Role</th><th>Status</th><th>Tgl Dibuat</th>';
+    tableHtml += '</tr></thead><tbody>';
+
+    let no = 1;
     rows.forEach(row => {
         const cells = row.cells;
-        const name = cells[1]?.textContent.trim() || '';
-        const email = cells[2]?.textContent.trim() || '';
-        const role = cells[3]?.textContent.trim() || '';
-        const activation = cells[4]?.textContent.trim() || '';
-        const accountStatus = cells[5]?.textContent.trim() || '';
-        const date = cells[6]?.textContent.trim() || '';
-        
-        const escapeCSV = (str) => '"' + (str || '').replace(/"/g, '""') + '"';
-        csvContent += `${escapeCSV(name)},${escapeCSV(email)},${escapeCSV(role)},${escapeCSV(activation)},${escapeCSV(accountStatus)},${escapeCSV(date)}\n`;
+        // Map cells: Name[1], Email[2], Role[3], Status[5], Created[6]
+        const name = cells[1]?.innerText.trim() || '';
+        const email = cells[2]?.innerText.trim() || '';
+        const role = cells[3]?.innerText.trim() || '';
+        const status = cells[5]?.innerText.trim() || '';
+        const date = cells[6]?.innerText.trim() || '';
+
+        tableHtml += `<tr>
+            <td>${no++}</td>
+            <td>${name}</td>
+            <td>${email}</td>
+            <td>${role}</td>
+            <td>${status}</td>
+            <td>${date}</td>
+        </tr>`;
     });
-    
-    // Use Blob for secure download
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    if (link.download !== undefined) {
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', `users_${new Date().toISOString().split('T')[0]}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    }
-    
-    Swal.fire('Berhasil!', 'Data pengguna telah diekspor ke CSV.', 'success');
+    tableHtml += '</tbody></table>';
+
+    // Open print window
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+        <html>
+        <head>
+            <title>Data Pengguna - KosConnect</title>
+            <style>
+                @media print {
+                    body { -webkit-print-color-adjust: exact; }
+                }
+                body { font-family: 'Segoe UI', sans-serif; padding: 40px; }
+                .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+                h1 { font-size: 24px; font-weight: bold; margin: 0 0 10px 0; }
+                p { margin: 0; color: #666; font-size: 14px; }
+                table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
+                th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+                th { background-color: #f3f4f6; color: #333; font-weight: bold; text-transform: uppercase; }
+                tr:nth-child(even) { background-color: #f9fafb; }
+                .meta { text-align: right; font-size: 11px; margin-top: 5px; color: #888; }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>Laporan Data Pengguna</h1>
+                <p>KosConnect Management System</p>
+                <div class="meta">Dicetak pada: ${new Date().toLocaleString('id-ID')}</div>
+            </div>
+            ${tableHtml}
+            <script>
+                setTimeout(() => {
+                    window.print();
+                    window.close();
+                }, 500);
+            <\/script>
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
 }
 
 function bulkAction(action) {

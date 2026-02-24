@@ -3,6 +3,10 @@ session_start();
 header('Content-Type: application/json');
 
 include '../config/db.php';
+include '../config/SessionChecker.php'; // Add SessionChecker
+
+// Try to restore session if active
+checkMultiDeviceSession($conn);
 
 $response = ['success' => false, 'message' => 'Aksi tidak valid.'];
 

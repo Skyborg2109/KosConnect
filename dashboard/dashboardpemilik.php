@@ -1,7 +1,8 @@
 <?php
 session_start();
 // Autentikasi dan Redirect
-if (!isset($_SESSION['user_logged_in']) || $_SESSION['role'] !== 'pemilik') { //
+if (!isset($_SESSION['user_logged_in']) || $_SESSION['role'] !== 'pemilik') { 
+    $_SESSION['login_error'] = "Anda harus login terlebih dahulu untuk mengakses halaman ini.";
     header("Location: ../auth/loginForm.php");
     exit();
 }
@@ -20,6 +21,7 @@ if (!checkMultiDeviceSession($conn)) {
 // Persiapan Data Tampilan Sederhana untuk Header
 $id_pemilik = $_SESSION['user_id'];
 $fullName = $_SESSION['fullname'] ?? 'Pemilik Kos';
+$userName = htmlspecialchars($fullName); // For compatibility with _user_profile_modal.php
 $names = explode(' ', $fullName);
 $initials = '';
 foreach ($names as $name) { $initials .= strtoupper(substr($name, 0, 1)); }
@@ -130,11 +132,12 @@ $conn->close();
         }
         
         .sidebar-link {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
             overflow: hidden;
         }
         
+        /* Left accent bar */
         .sidebar-link::before {
             content: '';
             position: absolute;
@@ -144,24 +147,86 @@ $conn->close();
             width: 4px;
             background: linear-gradient(180deg, #94a3b8, #64748b);
             transform: scaleY(0);
-            transition: transform 0.3s ease;
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        /* Gradient background overlay */
+        .sidebar-link::after {
+            content: '';
+            position: absolute;
+            left: -100%;
+            top: 0;
+            height: 100%;
+            width: 100%;
+            background: linear-gradient(90deg, 
+                rgba(148, 163, 184, 0.15) 0%, 
+                rgba(148, 163, 184, 0.25) 50%, 
+                rgba(148, 163, 184, 0.15) 100%);
+            transition: left 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 0;
         }
         
         .sidebar-link:hover {
-            background: rgba(255, 255, 255, 0.12);
-            padding-left: 28px;
+            background: linear-gradient(90deg, 
+                rgba(255, 255, 255, 0.08) 0%, 
+                rgba(255, 255, 255, 0.15) 100%);
+            padding-left: 32px;
+            transform: translateX(4px);
+            box-shadow: inset 0 0 20px rgba(148, 163, 184, 0.1),
+                        0 4px 12px rgba(0, 0, 0, 0.1);
         }
         
         .sidebar-link:hover::before {
             transform: scaleY(1);
         }
         
+        .sidebar-link:hover::after {
+            left: 100%;
+        }
+        
+        /* Icon animation on hover */
+        .sidebar-link:hover i {
+            transform: scale(1.15) rotate(5deg);
+            filter: drop-shadow(0 0 8px rgba(148, 163, 184, 0.6));
+        }
+        
+        .sidebar-link i {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            z-index: 1;
+        }
+        
+        /* Text animation on hover */
+        .sidebar-link span {
+            position: relative;
+            z-index: 1;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .sidebar-link:hover span {
+            letter-spacing: 0.5px;
+        }
+        
+        /* Active state enhancement */
+        .sidebar-link:active {
+            transform: translateX(2px);
+            transition: transform 0.1s ease;
+        }
+        
         .active-link {
-            background: rgba(255, 255, 255, 0.15) !important;
+            background: linear-gradient(90deg, 
+                rgba(255, 255, 255, 0.12) 0%, 
+                rgba(255, 255, 255, 0.18) 100%) !important;
             border-left-color: #94a3b8 !important;
             font-weight: 600;
-            padding-left: 28px !important;
-            box-shadow: inset 0 0 20px rgba(148, 163, 184, 0.2);
+            padding-left: 32px !important;
+            box-shadow: inset 0 0 25px rgba(148, 163, 184, 0.25),
+                        0 2px 8px rgba(0, 0, 0, 0.1);
+            transform: translateX(4px);
+        }
+        
+        .active-link::before {
+            transform: scaleY(1) !important;
         }
         
         .active-link::after {
@@ -172,9 +237,20 @@ $conn->close();
             transform: translateY(-50%);
             width: 4px;
             height: 60%;
-            background: #94a3b8;
+            background: linear-gradient(180deg, #94a3b8, #64748b);
             border-radius: 2px 0 0 2px;
+            box-shadow: 0 0 10px rgba(148, 163, 184, 0.5);
         }
+        
+        .active-link i {
+            transform: scale(1.1);
+            filter: drop-shadow(0 0 6px rgba(148, 163, 184, 0.5));
+        }
+        
+        .active-link span {
+            letter-spacing: 0.3px;
+        }
+
         
         /* Transisi untuk sidebar */
         .sidebar-transition {
@@ -393,11 +469,27 @@ $conn->close();
                 <h2 class="text-xl font-bold">Dashboard Pemilik</h2>
             </div>
             <button onclick="showProfileModal()" class="w-full flex items-center space-x-3 text-left hover:bg-white hover:bg-opacity-10 p-3 rounded-xl transition-all duration-300 group">
-                <?php if ($userPhoto): ?>
-                    <img id="sidebarUserPhoto" src="../uploads/profiles/<?php echo htmlspecialchars($userPhoto); ?>" alt="Foto Profil" class="w-12 h-12 rounded-full object-cover flex-shrink-0 ring-2 ring-white ring-opacity-30 group-hover:ring-opacity-60 transition-all">
-                <?php else: ?>
+                <?php 
+                    $userPhoto = trim($userPhoto ?? '');
+                    $displayPhoto = false;
+                    $profilePhotoUrl = '';
+
+                    if (!empty($userPhoto)) {
+                        if (strpos($userPhoto, 'http') === 0) {
+                            $profilePhotoUrl = $userPhoto;
+                            $displayPhoto = true;
+                        } elseif (file_exists(__DIR__ . '/../uploads/profiles/' . $userPhoto)) {
+                            $profilePhotoUrl = '../uploads/profiles/' . $userPhoto;
+                            $displayPhoto = true;
+                        }
+                    }
+
+                    if ($displayPhoto) {
+                ?>
+                    <img id="sidebarUserPhoto" src="<?php echo htmlspecialchars($profilePhotoUrl); ?>" alt="Foto Profil" onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name=<?php echo urlencode($fullName); ?>&background=random';" class="w-12 h-12 rounded-full object-cover flex-shrink-0 ring-2 ring-white ring-opacity-30 group-hover:ring-opacity-60 transition-all">
+                <?php } else { ?>
                     <div id="sidebarUserPhoto" class="w-12 h-12 bg-slate-600 rounded-full flex items-center justify-center text-slate-300 font-bold text-lg flex-shrink-0 ring-2 ring-white ring-opacity-30 group-hover:ring-opacity-60 transition-all"><?php echo $initials; ?></div>
-                <?php endif; ?>
+                <?php } ?>
                 <div class="flex-grow">
                     <p class="font-bold text-white group-hover:text-slate-100"><?php echo htmlspecialchars($fullName); ?></p>
                     <p class="text-sm text-slate-300 group-hover:text-slate-200"><?php echo htmlspecialchars(ucfirst($userRole)); ?></p>
@@ -454,111 +546,7 @@ $conn->close();
     <!-- Overlay untuk mobile saat sidebar terbuka -->
     <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-60 z-40 hidden md:hidden backdrop-blur-sm"></div>
 
-    <!-- ======================================================= -->
-    <!-- MODAL PROFIL SAYA -->
-    <!-- ======================================================= -->
-    <div id="profileModal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-50 p-4 backdrop-blur-sm">
-        <div class="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div class="p-6 border-b bg-gradient-to-r from-slate-600 to-slate-700 text-white rounded-t-2xl flex justify-between items-center sticky top-0 z-10">
-                <div class="flex items-center space-x-3">
-                    <div class="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
-                        <i class="fas fa-user-circle text-xl"></i>
-                    </div>
-                    <h3 class="text-2xl font-bold">Profil Saya</h3>
-                </div>
-                <button type="button" onclick="closeProfileModal()" class="text-white hover:bg-white hover:bg-opacity-20 rounded-full w-10 h-10 flex items-center justify-center transition-all text-2xl">&times;</button>
-            </div>
-            <!-- Form Ganti Foto Profil -->
-            <div class="p-6 border-b bg-gradient-to-r from-blue-50 to-indigo-50">
-                <h4 class="text-lg font-semibold mb-4 text-slate-800 flex items-center">
-                    <i class="fas fa-camera mr-2 text-blue-600"></i>
-                    Ganti Foto Profil
-                </h4>
-                <form id="photoUpdateForm" onsubmit="savePhoto(event)" class="flex flex-col sm:flex-row items-center gap-4">
-                    <input type="hidden" name="action" value="update_photo"> 
-                    <div class="relative group">
-                        <img id="photoPreview" src="<?php echo $userPhoto ? '../uploads/profiles/' . htmlspecialchars($userPhoto) : 'https://via.placeholder.com/100'; ?>" alt="Preview" class="w-24 h-24 rounded-full object-cover bg-gray-200 ring-4 ring-blue-200 group-hover:ring-blue-400 transition-all">
-                        <div class="absolute inset-0 bg-black bg-opacity-40 rounded-full opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
-                            <i class="fas fa-camera text-white text-2xl"></i>
-                        </div>
-                    </div>
-                    <div class="flex-grow w-full sm:w-auto">
-                        <input type="file" name="foto_profil" id="foto_profil" class="block w-full text-sm text-gray-600 file:mr-4 file:py-3 file:px-6 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 transition-all cursor-pointer" onchange="previewPhoto(event)" required>
-                        <div id="photoUpdateError" class="hidden text-red-600 text-sm mt-2 bg-red-50 p-2 rounded-lg"></div>
-                    </div>
-                    <div class="w-full sm:w-auto">
-                        <button type="submit" id="savePhotoButton" class="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 px-6 rounded-full hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-xl">
-                            <i class="fas fa-upload mr-2"></i>Unggah
-                        </button>
-                    </div>
-                </form>
-            </div>
-            <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
-                <!-- Form Informasi Pribadi -->
-                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                    <h4 class="text-lg font-semibold mb-4 text-slate-800 flex items-center">
-                        <i class="fas fa-user-edit mr-2 text-slate-600"></i>
-                        Informasi Pribadi
-                    </h4>
-                    <form id="profileUpdateForm" onsubmit="saveProfile(event)" class="space-y-4">
-                        <input type="hidden" name="action" value="update_profile">
-                        <div>
-                            <label for="profile_fullname" class="block text-sm font-medium text-gray-700 mb-1">
-                                <i class="fas fa-id-card mr-1 text-slate-500"></i>Nama Lengkap
-                            </label>
-                            <input type="text" name="fullname" id="profile_fullname" value="<?php echo htmlspecialchars($fullName); ?>" required class="mt-1 block w-full border-2 border-gray-300 rounded-lg shadow-sm p-3 form-input hover:border-slate-400 focus:border-slate-500 transition-all">
-                        </div>
-                        <div>
-                            <label for="profile_email" class="block text-sm font-medium text-gray-700 mb-1">
-                                <i class="fas fa-envelope mr-1 text-slate-500"></i>Email
-                            </label>
-                            <input type="email" id="profile_email" value="<?php echo htmlspecialchars($userEmail); ?>" disabled class="mt-1 block w-full border-2 border-gray-200 rounded-lg shadow-sm p-3 bg-gray-50 text-gray-500 cursor-not-allowed">
-                        </div>
-                        <div id="profileUpdateError" class="hidden text-red-600 text-sm bg-red-50 p-3 rounded-lg border border-red-200"></div>
-                        <div class="text-right pt-2">
-                            <button type="submit" id="saveProfileButton" class="bg-gradient-to-r from-slate-600 to-slate-700 text-white py-3 px-6 rounded-lg hover:from-slate-700 hover:to-slate-800 transition-all shadow-md hover:shadow-lg">
-                                <i class="fas fa-save mr-2"></i>Simpan Nama
-                            </button>
-                        </div>
-                    </form>
-                </div>
-                <!-- Form Ubah Password -->
-                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                    <h4 class="text-lg font-semibold mb-4 text-slate-800 flex items-center">
-                        <i class="fas fa-lock mr-2 text-slate-600"></i>
-                        Ubah Password
-                    </h4>
-                    <form id="passwordUpdateForm" onsubmit="savePassword(event)" class="space-y-4">
-                        <input type="hidden" name="action" value="update_password">
-                        <div>
-                            <label for="old_password" class="block text-sm font-medium text-gray-700 mb-1">
-                                <i class="fas fa-key mr-1 text-slate-500"></i>Password Lama
-                            </label>
-                            <input type="password" name="old_password" id="old_password" required class="mt-1 block w-full border-2 border-gray-300 rounded-lg shadow-sm p-3 form-input hover:border-slate-400 focus:border-slate-500 transition-all">
-                        </div>
-                        <div>
-                            <label for="new_password" class="block text-sm font-medium text-gray-700 mb-1">
-                                <i class="fas fa-key mr-1 text-slate-500"></i>Password Baru
-                            </label>
-                            <input type="password" name="new_password" id="new_password" required class="mt-1 block w-full border-2 border-gray-300 rounded-lg shadow-sm p-3 form-input hover:border-slate-400 focus:border-slate-500 transition-all">
-                        </div>
-                        <div>
-                            <label for="confirm_password" class="block text-sm font-medium text-gray-700 mb-1">
-                                <i class="fas fa-check-circle mr-1 text-slate-500"></i>Konfirmasi Password Baru
-                            </label>
-                            <input type="password" name="confirm_password" id="confirm_password" required class="mt-1 block w-full border-2 border-gray-300 rounded-lg shadow-sm p-3 form-input hover:border-slate-400 focus:border-slate-500 transition-all">
-                        </div>
-                        <div id="passwordUpdateError" class="hidden text-red-600 text-sm bg-red-50 p-3 rounded-lg border border-red-200"></div>
-                        <div class="text-right pt-2">
-                            <button type="submit" id="savePasswordButton" class="bg-gradient-to-r from-gray-700 to-gray-800 text-white py-3 px-6 rounded-lg hover:from-gray-800 hover:to-gray-900 transition-all shadow-md hover:shadow-lg">
-                                <i class="fas fa-shield-alt mr-2"></i>Ubah Password
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
+    <?php include '../user/_user_profile_modal.php'; ?>
 
     <script>
         (function(){
@@ -566,7 +554,7 @@ $conn->close();
                 const newPhoto = localStorage.getItem('newProfilePhoto');
                 if (newPhoto) {
                     const ts = Date.now();
-                    const url = `../uploads/profiles/${newPhoto}?t=${ts}`;
+                    const url = newPhoto.startsWith('http') ? newPhoto : `../uploads/profiles/${newPhoto}?t=${ts}`;
                     document.querySelectorAll('img').forEach(img => {
                         try { if (img.src && img.src.indexOf('/uploads/profiles/') !== -1) img.src = url; } catch(e){}
                     });
@@ -705,245 +693,6 @@ $conn->close();
             sidebarOverlay.classList.add('hidden');
         });
 
-        // --- LOGIKA MODAL PROFIL ---
-        function showProfileModal() {
-            document.getElementById('profileModal').classList.remove('hidden');
-            document.getElementById('profileModal').classList.add('flex');
-        }
-
-        function showNotifications() {
-            fetch('../pemilik_kos/pemilik_get_notifications.php')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success' && data.notifications.length > 0) {
-                        let notifHtml = '<div class="space-y-3 text-left max-h-96 overflow-y-auto pr-2">';
-                        data.notifications.forEach(notif => {
-                            const readClass = notif.is_read == 1 ? 'opacity-60' : 'font-semibold border-l-4 border-blue-500';
-                            const icon = notif.is_read == 1 ? 'fa-envelope-open' : 'fa-envelope';
-                            notifHtml += `
-                                <div class="p-4 border rounded-xl hover:bg-gray-50 ${readClass} transition-all duration-300 hover:shadow-md">
-                                    <div class="flex items-start space-x-3">
-                                        <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                                            <i class="fas ${icon} text-blue-600"></i>
-                                        </div>
-                                        <div class="flex-grow">
-                                            <p class="text-sm text-gray-800">${notif.pesan}</p>
-                                            <div class="flex justify-between items-center mt-2">
-                                                <span class="text-xs text-gray-400">
-                                                    <i class="far fa-clock mr-1"></i>${notif.created_at}
-                                                </span>
-                                                ${notif.link ? `<a href="${notif.link}" class="text-xs text-blue-600 hover:text-blue-700 font-medium hover:underline">Lihat Detail →</a>` : ''}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>`;
-                        });
-                        notifHtml += '</div>';
-
-                        Swal.fire({
-                            title: '<strong class="text-2xl">📬 Notifikasi Anda</strong>',
-                            html: notifHtml,
-                            width: '600px',
-                            showConfirmButton: true,
-                            confirmButtonText: '<i class="fas fa-check-double mr-2"></i>Tandai Semua Sudah Dibaca',
-                            confirmButtonColor: '#475569',
-                            customClass: {
-                                popup: 'rounded-2xl',
-                                confirmButton: 'rounded-lg px-6 py-3'
-                            }
-                        }).then(() => {
-                            fetch('../pemilik_kos/pemilik_get_notifications.php', { method: 'POST' });
-                            const badge = document.getElementById('notifBadge');
-                            if (badge) {
-                                badge.style.animation = 'fadeOut 0.3s ease';
-                                setTimeout(() => badge.remove(), 300);
-                            }
-                        });
-                    } else {
-                        Swal.fire({
-                            title: 'Notifikasi',
-                            html: '<div class="text-center py-4"><i class="fas fa-inbox text-gray-300 text-5xl mb-4"></i><p class="text-gray-600">Tidak ada notifikasi baru.</p></div>',
-                            icon: 'info',
-                            confirmButtonColor: '#475569',
-                            customClass: {
-                                popup: 'rounded-2xl'
-                            }
-                        });
-                    }
-                });
-        }
-
-        function closeProfileModal() {
-            document.getElementById('profileModal').classList.add('hidden');
-            document.getElementById('profileModal').classList.remove('flex');
-            // Reset form dan pesan error
-            document.getElementById('profileUpdateForm').reset();
-            document.getElementById('passwordUpdateForm').reset();
-            document.getElementById('profileUpdateError').classList.add('hidden');
-            document.getElementById('passwordUpdateError').classList.add('hidden');
-        }
-
-        function previewPhoto(event) {
-            const reader = new FileReader();
-            reader.onload = function(){
-                document.getElementById('photoPreview').src = reader.result;
-            };
-            reader.readAsDataURL(event.target.files[0]);
-        }
-
-        function saveProfile(event) {
-            event.preventDefault();
-            const form = document.getElementById('profileUpdateForm');
-            const formData = new FormData(form);
-            const button = document.getElementById('saveProfileButton');
-            const errorBox = document.getElementById('profileUpdateError');
-
-            button.disabled = true;
-            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Menyimpan...';
-            errorBox.classList.add('hidden');
-
-            fetch('../pemilik_kos/process_profile.php', { method: 'POST', body: formData })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        Swal.fire({
-                            icon: 'success',
-                            title: '<strong>Berhasil!</strong>',
-                            html: `<p class="text-gray-600">${data.message}</p>`,
-                            confirmButtonColor: '#475569',
-                            customClass: {
-                                popup: 'rounded-2xl',
-                                confirmButton: 'rounded-lg px-6 py-3'
-                            }
-                        });
-                        // Update nama di header
-                        document.querySelector('#sidebar .font-bold.text-white').textContent = data.new_name;
-                        document.getElementById('profile_fullname').value = data.new_name;
-                        closeProfileModal();
-                    } else {
-                        errorBox.innerHTML = `<i class="fas fa-exclamation-circle mr-2"></i>${data.message}`;
-                        errorBox.classList.remove('hidden');
-                    }
-                })
-                .catch(err => {
-                    errorBox.innerHTML = '<i class="fas fa-exclamation-circle mr-2"></i>Terjadi kesalahan jaringan.';
-                    errorBox.classList.remove('hidden');
-                    console.error('Save Profile Error:', err);
-                })
-                .finally(() => {
-                    button.disabled = false;
-                    button.innerHTML = '<i class="fas fa-save mr-2"></i>Simpan Nama';
-                });
-        }
-
-        function savePassword(event) {
-            event.preventDefault();
-            const form = document.getElementById('passwordUpdateForm');
-            const formData = new FormData(form);
-            const button = document.getElementById('savePasswordButton');
-            const errorBox = document.getElementById('passwordUpdateError');
-
-            button.disabled = true;
-            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Menyimpan...';
-            errorBox.classList.add('hidden');
-
-            fetch('../pemilik_kos/process_profile.php', { method: 'POST', body: formData })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        Swal.fire({
-                            icon: 'success',
-                            title: '<strong>Berhasil!</strong>',
-                            html: `<p class="text-gray-600">${data.message}</p>`,
-                            confirmButtonColor: '#475569',
-                            customClass: {
-                                popup: 'rounded-2xl',
-                                confirmButton: 'rounded-lg px-6 py-3'
-                            }
-                        });
-                        form.reset();
-                        closeProfileModal();
-                    } else {
-                        errorBox.innerHTML = `<i class="fas fa-exclamation-circle mr-2"></i>${data.message}`;
-                        errorBox.classList.remove('hidden');
-                    }
-                })
-                .catch(err => {
-                    errorBox.innerHTML = '<i class="fas fa-exclamation-circle mr-2"></i>Terjadi kesalahan jaringan.';
-                    errorBox.classList.remove('hidden');
-                    console.error('Save Password Error:', err);
-                })
-                .finally(() => {
-                    button.disabled = false;
-                    button.innerHTML = '<i class="fas fa-shield-alt mr-2"></i>Ubah Password';
-                });
-        }
-
-        function savePhoto(event) {
-            event.preventDefault();
-            const form = document.getElementById('photoUpdateForm');
-            const formData = new FormData(form);
-            const button = document.getElementById('savePhotoButton');
-            const errorBox = document.getElementById('photoUpdateError');
-
-            button.disabled = true;
-            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Mengunggah...';
-            errorBox.classList.add('hidden');
-
-            fetch('../pemilik_kos/process_profile.php', { method: 'POST', body: formData })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        Swal.fire({
-                            icon: 'success',
-                            title: '<strong>Berhasil!</strong>',
-                            html: `<p class="text-gray-600">${data.message}</p>`,
-                            confirmButtonColor: '#475569',
-                            customClass: {
-                                popup: 'rounded-2xl',
-                                confirmButton: 'rounded-lg px-6 py-3'
-                            }
-                        });
-                        const ts = Date.now();
-                        const newPhotoUrl = `../uploads/profiles/${data.new_photo}?t=${ts}`;
-                        // Refresh all profile images on the page
-                        document.querySelectorAll('img').forEach(img => {
-                            try {
-                                if (img.src && img.src.indexOf('/uploads/profiles/') !== -1) {
-                                    img.src = newPhotoUrl;
-                                }
-                            } catch (e) {}
-                        });
-
-                        const sidebarNode = document.getElementById('sidebarUserPhoto');
-                        if (sidebarNode && sidebarNode.tagName !== 'IMG') {
-                            const img = document.createElement('img');
-                            img.id = 'sidebarUserPhoto';
-                            img.className = 'w-12 h-12 rounded-full object-cover flex-shrink-0 ring-2 ring-white ring-opacity-30 group-hover:ring-opacity-60 transition-all';
-                            img.src = newPhotoUrl;
-                            img.alt = 'Foto Profil';
-                            sidebarNode.parentNode.replaceChild(img, sidebarNode);
-                        }
-
-                        const preview = document.getElementById('photoPreview');
-                        if (preview) preview.src = newPhotoUrl;
-                        try { localStorage.setItem('newProfilePhoto', data.new_photo); } catch (e) {}
-                        form.reset();
-                    } else {
-                        errorBox.innerHTML = `<i class="fas fa-exclamation-circle mr-2"></i>${data.message}`;
-                        errorBox.classList.remove('hidden');
-                    }
-                })
-                .catch(err => {
-                    errorBox.innerHTML = '<i class="fas fa-exclamation-circle mr-2"></i>Terjadi kesalahan jaringan.';
-                    errorBox.classList.remove('hidden');
-                })
-                .finally(() => {
-                    button.disabled = false;
-                    button.innerHTML = '<i class="fas fa-upload mr-2"></i>Unggah';
-                });
-        }
-
         // Tutup modal jika klik di luar area konten
         document.getElementById('profileModal').addEventListener('click', function(e) {
             if (e.target === this) closeProfileModal();
@@ -1001,13 +750,43 @@ $conn->close();
             form.reset();
             errorBox.classList.add('hidden');
             modal.classList.remove('hidden');
-            imagePreview.innerHTML = '<p class="text-gray-400">Preview Gambar</p>';
+            document.getElementById('image_preview').innerHTML = `
+                <i class="fas fa-image text-3xl mb-2"></i>
+                <p class="text-sm">Klik atau tarik gambar ke sini</p>
+            `;
+            
+            // Clear Room Types
+            document.getElementById('roomTypesContainer').innerHTML = '';
+            
+            // Clear Gallery Previews
+            document.querySelectorAll('.preview-container').forEach(el => el.innerHTML = '');
+            
+            // Clear all category previews
+            document.querySelectorAll('.preview-container').forEach(el => el.innerHTML = '');
+            // Reset visuals for all file inputs (optional but good UI)
+            document.querySelectorAll('[name^="foto_"]').forEach(input => {
+                const feedbackDiv = input.nextElementSibling;
+                if(feedbackDiv) {
+                     feedbackDiv.innerHTML = `
+                        <i class="fas fa-images text-xl mb-1 group-hover:text-purple-500 transition-colors"></i>
+                        <p class="text-xs font-medium text-slate-500">Klik untuk upload</p>
+                    `;
+                }
+            });
+
+            // Clear existing photos containers
+            ['Bangunan', 'Kamar', 'Kamar Mandi', 'Fasilitas Bersama', 'Lainnya'].forEach(cat => {
+                 const el = document.getElementById(`existing_photos_${cat}`);
+                 if(el) el.innerHTML = '';
+            });
+            
             document.getElementById('gambar_lama').value = '';
 
             if (mode === 'add') {
                 title.textContent = 'Tambah Kos Baru';
                 actionInput.value = 'add';
                 idInput.value = '';
+                addRoomTypeInput(); // Add one empty room type input by default for new kos
             } else { // mode === 'edit'
                 title.textContent = 'Edit Data Kos';
                 actionInput.value = 'edit';
@@ -1018,14 +797,55 @@ $conn->close();
                     .then(response => response.json())
                     .then(res => {
                         if (res.status === 'success') {
-                            document.getElementById('nama_kost').value = res.data.nama_kost;
-                            document.getElementById('alamat').value = res.data.alamat;
-                            document.getElementById('harga').value = res.data.harga;
-                            document.getElementById('deskripsi').value = res.data.deskripsi;
-                            document.getElementById('fasilitas').value = res.data.fasilitas;
-                            document.getElementById('gambar_lama').value = res.data.gambar;
-                            if (res.data.gambar) {
-                                imagePreview.innerHTML = `<img src="../uploads/kost/${res.data.gambar}" class="h-full w-full object-contain">`;
+                            const kosData = res.data; // Use a consistent variable name
+                            document.getElementById('nama_kost').value = kosData.nama_kost;
+                            document.getElementById('alamat').value = kosData.alamat;
+                            document.getElementById('harga').value = parseInt(kosData.harga);
+                            document.getElementById('deskripsi').value = kosData.deskripsi;
+                            document.getElementById('fasilitas').value = kosData.fasilitas;
+                            document.getElementById('peraturan').value = kosData.peraturan || '';
+                            document.getElementById('tipe_kost').value = kosData.tipe_kost;
+                            document.getElementById('jenis_kamar').value = kosData.jenis_kamar || 'Kamar Mandi Dalam';
+                            document.getElementById('gambar_lama').value = kosData.gambar;
+                            if (kosData.gambar) {
+                                let imgSrc = kosData.gambar;
+                                if (!imgSrc.startsWith('http')) {
+                                    imgSrc = `../uploads/kost/${imgSrc}`;
+                                }
+                                document.getElementById('image_preview').innerHTML = `<img src="${imgSrc}" class="h-full w-full object-contain">`;
+                            }
+                            
+                            // Load Room Types
+                            const rtContainer = document.getElementById('roomTypesContainer');
+                            rtContainer.innerHTML = ''; // Clear
+                            if (kosData.room_types && kosData.room_types.length > 0) {
+                                kosData.room_types.forEach(rt => addRoomTypeInput(rt));
+                            } else {
+                                 // Add one empty by default if none? No, optional.
+                            }
+                            
+                            // Load additional photos organized by category
+                            if (kosData.photos && kosData.photos.length > 0) {
+                                kosData.photos.forEach(photo => {
+                                    let cat = photo.category || 'Lainnya';
+                                    const container = document.getElementById(`existing_photos_${cat}`);
+                                    if (container) {
+                                        const photoDiv = document.createElement('div');
+                                        photoDiv.className = 'relative group h-20 w-full rounded-lg overflow-hidden border border-gray-200';
+                                        photoDiv.id = `photo-${photo.id_photo}`;
+                                        let photoSrc = photo.file_name;
+                                        if (!photoSrc.startsWith('http')) {
+                                            photoSrc = `../uploads/kost/${photoSrc}`;
+                                        }
+                                        photoDiv.innerHTML = `
+                                            <img src="${photoSrc}" class="h-full w-full object-cover">
+                                            <button type="button" onclick="deletePhoto(${photo.id_photo}, ${id})" class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <i class="fas fa-times text-xs"></i>
+                                            </button>
+                                        `;
+                                        container.appendChild(photoDiv);
+                                    }
+                                });
                             }
                         } else {
                             Swal.fire('Gagal', 'Gagal mengambil data kos: ' + res.message, 'error');
@@ -1040,9 +860,122 @@ $conn->close();
             }
         }
 
+        // Fungsi untuk menampilkan notifikasi
+        function showNotifications() {
+            // Optimistic UI update: Sembunyikan badge segera
+            const badge = document.getElementById('notifBadge');
+            if (badge) {
+                badge.style.animation = 'fadeOut 0.3s ease';
+                setTimeout(() => badge.remove(), 300);
+            }
+
+            fetch('../pemilik_kos/pemilik_get_notifications.php')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success' && data.notifications.length > 0) {
+                        let notifHtml = '<div class="space-y-3 text-left max-h-96 overflow-y-auto pr-2">';
+                        data.notifications.forEach(notif => {
+                            const readClass = notif.is_read == 1 ? 'opacity-60' : 'font-semibold border-l-4 border-blue-500';
+                            const icon = notif.is_read == 1 ? 'fa-envelope-open' : 'fa-envelope';
+                            notifHtml += `
+                                <div class="p-4 border rounded-xl hover:bg-gray-50 ${readClass} transition-all duration-300 hover:shadow-md">
+                                    <div class="flex items-start space-x-3">
+                                        <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                            <i class="fas ${icon} text-blue-600"></i>
+                                        </div>
+                                        <div class="flex-grow">
+                                            <p class="text-sm text-gray-800">${notif.pesan}</p>
+                                            <div class="flex justify-between items-center mt-2">
+                                                <span class="text-xs text-gray-400">
+                                                    <i class="far fa-clock mr-1"></i>${notif.created_at}
+                                                </span>
+                                                ${(() => {
+                                                    if (!notif.link) return '';
+                                                    let cleanLink = notif.link;
+                                                    // Sanitize link for virtual host
+                                                    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                                                        if (cleanLink.startsWith('/KosConnect/')) {
+                                                            cleanLink = cleanLink.replace('/KosConnect/', '/');
+                                                        }
+                                                    }
+                                                    return `<a href="${cleanLink}" class="text-xs text-blue-600 hover:text-blue-700 font-medium hover:underline">Lihat Detail →</a>`;
+                                                })()}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>`;
+                        });
+                        notifHtml += '</div>';
+
+                        Swal.fire({
+                            title: '<strong class="text-2xl">📬 Notifikasi Anda</strong>',
+                            html: notifHtml,
+                            width: '600px',
+                            showConfirmButton: true,
+                            confirmButtonText: '<i class="fas fa-check-double mr-2"></i>Tandai Semua Sudah Dibaca',
+                            confirmButtonColor: '#475569',
+                            customClass: {
+                                popup: 'rounded-2xl',
+                                confirmButton: 'rounded-lg px-6 py-3'
+                            }
+                        }).then(() => {
+                            fetch('../pemilik_kos/pemilik_get_notifications.php', { method: 'POST' });
+                        });
+                    } else {
+                        Swal.fire({
+                            title: 'Notifikasi',
+                            html: '<div class="text-center py-4"><i class="fas fa-inbox text-gray-300 text-5xl mb-4"></i><p class="text-gray-600">Tidak ada notifikasi baru.</p></div>',
+                            icon: 'info',
+                            confirmButtonColor: '#475569',
+                            customClass: {
+                                popup: 'rounded-2xl'
+                            }
+                        });
+                    }
+                });
+        }
+
         // Fungsi untuk edit kos (dipanggil dari modul owner_manage_kost)
         function editKos(id_kost) {
             showKosModal('edit', id_kost);
+        }
+
+        function deletePhoto(id_photo, id_kost) { // Logic to delete specific photo
+            Swal.fire({
+                title: 'Hapus Foto?',
+                text: "Foto ini akan dihapus permanen.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Ya, Hapus!'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const formData = new FormData();
+                    formData.append('action', 'delete_photo');
+                    formData.append('id_photo', id_photo);
+                    formData.append('id_kost', id_kost);
+
+                    fetch('../pemilik_kos/process_kost.php', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            const elem = document.getElementById(`photo-${id_photo}`);
+                            if (elem) elem.remove();
+                            Swal.fire('Terhapus!', 'Foto berhasil dihapus.', 'success');
+                        } else {
+                            Swal.fire('Gagal', data.message, 'error');
+                        }
+                    })
+                    .catch(e => {
+                        console.error(e);
+                        Swal.fire('Error', 'Gagal menghapus foto.', 'error');
+                    });
+                }
+            });
         }
 
         function closeKosModal() { //
@@ -1173,16 +1106,32 @@ $conn->close();
                 });
         }
 
-        function editKamar(id_kamar, nama_kamar, harga, status) {
+        function editKamar(id, nama, tipe, harga, status, foto, fasilitas) {
             // Set form to edit mode with animation
             const formTitle = document.getElementById('formTitle');
             const saveButton = document.getElementById('saveKamarButton');
             
+            document.getElementById('formTitle').innerHTML = '<i class="fas fa-edit mr-2 text-blue-600"></i>Edit Kamar: ' + nama;
             document.getElementById('kamarAction').value = 'edit';
-            document.getElementById('kamarId').value = id_kamar;
-            document.getElementById('nama_kamar').value = nama_kamar;
+            document.getElementById('kamarId').value = id;
+            document.getElementById('nama_kamar').value = nama;
+            document.getElementById('tipe_kamar').value = tipe;
             document.getElementById('harga_kamar').value = harga;
             document.getElementById('status_kamar').value = status;
+            document.getElementById('fasilitas_kamar').value = fasilitas;
+            
+            // Set photo preview
+            const photoPreview = document.getElementById('kamarPhotoPreview');
+            // Pratinjau Foto
+            const previewContainer = document.getElementById('kamarPhotoPreview');
+            if (foto) {
+                // Check if it's already a full URL or a relative path (starts with ../ or /)
+                const isPath = foto.startsWith('http') || foto.startsWith('../') || foto.startsWith('/');
+                const imgSrc = isPath ? foto : `../uploads/rooms/${foto}`;
+                previewContainer.innerHTML = `<img src="${imgSrc}" class="w-full h-full object-cover rounded-xl shadow-sm">`;
+            } else {
+                previewContainer.innerHTML = '<i class="fas fa-image text-4xl text-gray-300"></i>';
+            }
             
             // Animate title change
             formTitle.style.opacity = '0';
@@ -1220,6 +1169,23 @@ $conn->close();
             document.getElementById('saveKamarButton').innerHTML = '<i class="fas fa-save mr-2"></i>Simpan';
             document.getElementById('cancelEditButton').classList.add('hidden');
             document.getElementById('kamarFormError').classList.add('hidden');
+            
+            // Reset photo preview
+            const photoPreview = document.getElementById('kamarPhotoPreview');
+            if (photoPreview) {
+                photoPreview.innerHTML = '<i class="fas fa-image text-purple-200 text-3xl"></i>';
+            }
+        }
+
+        function previewKamarPhoto(input) {
+            const preview = document.getElementById('kamarPhotoPreview');
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover">`;
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
         }
 
         function saveKamar(event, id_kost) {
@@ -1370,9 +1336,44 @@ $conn->close();
 
         // Inisialisasi: Muat konten dashboard awal saat halaman siap
         document.addEventListener('DOMContentLoaded', function() {
-            // Buat event palsu untuk menjaga konsistensi fungsi
-            const fakeEvent = { preventDefault: () => {}, currentTarget: document.querySelector('[data-module="owner_dashboard_summary"]') };
-            loadContent('owner_dashboard_summary', fakeEvent);
+            // Cek apakah ada parameter module di URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const moduleParam = urlParams.get('module');
+            
+            // Tentukan modul yang akan dimuat (dari URL atau default)
+            const moduleToLoad = moduleParam || 'owner_dashboard_summary';
+            
+            // Jika ada parameter status (untuk filter booking), tambahkan ke nama module untuk diproses loadContent
+            // Perhatian: loadContent (dan pemilik_get_module.php) mungkin perlu penyesuaian jika mereka tidak mengharapkan string query di nama module
+            // Namun, berdasarkan logika sebelumnya (onclick="loadContent('owner_manage_booking&status=pending')"), 
+            // kita bisa meneruskan query string sebagai bagian dari moduleName atau menangani secara terpisah.
+            // Solusi aman: Jika ada parameter lain, append manual ke moduleName agar diteruskan ke fetch URL.
+            
+            let moduleKey = moduleToLoad;
+            
+            // Kumpulkan parameter lain selain 'module'
+            let extraParams = [];
+            for (const [key, value] of urlParams) {
+                if (key !== 'module') {
+                    extraParams.push(`${key}=${value}`);
+                }
+            }
+            
+            if (extraParams.length > 0) {
+                moduleKey += '&' + extraParams.join('&');
+            }
+
+            // Cari link di sidebar yang cocok untuk highlight
+            // Kita cari yang data-module nya cocok dengan module dasar (tanpa query string)
+            const activeLink = document.querySelector(`[data-module="${moduleToLoad}"]`);
+            
+            // Buat event palsu
+            const fakeEvent = { 
+                preventDefault: () => {}, 
+                currentTarget: activeLink || document.querySelector('[data-module="owner_dashboard_summary"]') 
+            };
+            
+            loadContent(moduleKey, fakeEvent);
         });
 
         // Fungsi untuk menginisialisasi grafik setelah konten dimuat
@@ -1643,74 +1644,335 @@ $conn->close();
                 }
             });
         }
+
+        function previewImage(input, previewId) {
+            const preview = document.getElementById(previewId);
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.innerHTML = `<img src="${e.target.result}" class="h-full w-full object-contain rounded-lg">`;
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        // Helper to preview images for a specific category input
+        function previewCategory(input) {
+            // Find the container for previews (assumed to be the next sibling or found by class)
+            // In our HTML structure: input.parent -> next Sibling is .preview-container
+            const container = input.parentElement.parentElement.querySelector('.preview-container'); 
+            if(!container) return;
+            
+            container.innerHTML = ''; // Clear previous previews
+            
+            if (input.files) {
+                Array.from(input.files).forEach(file => {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const imgDiv = document.createElement('div');
+                        imgDiv.className = 'relative h-20 w-full rounded-lg overflow-hidden border border-slate-200';
+                        imgDiv.innerHTML = `<img src="${e.target.result}" class="h-full w-full object-cover">`;
+                        container.appendChild(imgDiv);
+                    }
+                    reader.readAsDataURL(file);
+                });
+                
+                // Update label feedback
+                const count = input.files.length;
+                const feedbackDiv = input.nextElementSibling;
+                if (feedbackDiv) {
+                    if (count > 0) {
+                        feedbackDiv.innerHTML = `
+                             <i class="fas fa-check-circle text-3xl text-emerald-500 mb-2"></i>
+                             <p class="text-sm font-bold text-slate-700">${count} Foto Dipilih</p>
+                        `;
+                    } else {
+                        // Reset to default icon (we might need to store original HTML or just simplify)
+                        // Simplified reset:
+                         feedbackDiv.innerHTML = `
+                            <i class="fas fa-images text-xl mb-1 group-hover:text-purple-500 transition-colors"></i>
+                            <p class="text-xs font-medium text-slate-500">Klik untuk upload</p>
+                        `;
+                    }
+                }
+            }
+        }
+
+        // Function to add a new room type input field
+        // Function to add a new room type input field
+        function addRoomTypeInput(existingData = null) {
+            const container = document.getElementById('roomTypesContainer');
+            // We use simple array notation type_name[] which PHP handles automatically as arrays.
+            // No need for explicit indexing [0], [1] unless keys matter. PHP re-indexes numerically.
+            
+            const div = document.createElement('div');
+            div.className = 'bg-slate-50 p-4 rounded-xl border border-slate-200 relative';
+            div.innerHTML = `
+                <div class="absolute top-2 right-2 cursor-pointer text-slate-400 hover:text-red-500 transition-colors" onclick="this.parentElement.remove()">
+                    <i class="fas fa-times"></i>
+                </div>
+                <div class="grid grid-cols-1 gap-3">
+                    <input type="hidden" name="type_id[]" value="${existingData ? existingData.id_tipe : 0}">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Nama Tipe Kamar</label>
+                        <input type="text" name="type_name[]" value="${existingData ? existingData.nama_tipe : ''}" class="w-full text-sm border-slate-200 rounded-lg focus:ring-purple-200 p-2" placeholder="Ex: Deluxe, Standard, VIP" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Foto Tipe</label>
+                        <div class="flex items-center gap-3">
+                            <div class="h-12 w-12 bg-white rounded-lg border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
+                                ${existingData && existingData.foto_tipe ? `<img src="${existingData.foto_tipe}" class="h-full w-full object-cover">` : '<i class="fas fa-image text-slate-300"></i>'}
+                            </div>
+                            <input type="file" name="type_image[]" class="text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100" accept="image/*">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Peraturan Kamar (Opsional)</label>
+                        <textarea name="type_peraturan[]" rows="2" class="w-full text-sm border-slate-200 rounded-lg focus:ring-purple-200 p-2" placeholder="Contoh: Maksimal 2 orang...">${existingData ? (existingData.peraturan_kamar || '') : ''}</textarea>
+                    </div>
+                </div>
+            `;
+            container.appendChild(div);
+        }
+
+        // Function to remove a room type input field
+        function removeRoomTypeInput(button) {
+            button.closest('.flex.items-center.space-x-2').remove();
+            // Re-index inputs after removal to ensure correct array submission
+            const container = document.getElementById('roomTypesContainer');
+            Array.from(container.children).forEach((child, idx) => {
+                child.querySelectorAll('input').forEach(input => {
+                    if (input.name) {
+                        input.name = input.name.replace(/\[\d+\]/, `[${idx}]`);
+                    }
+                });
+            });
+        }
     </script>
 
     <!-- Modal untuk Tambah/Edit Kos -->
-    <div id="kosModal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-50 p-4 backdrop-blur-sm">
-        <div class="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
+    <div id="kosModal" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl w-full max-w-xl mx-4 max-h-[90vh] overflow-y-auto shadow-2xl transition-all transform scale-100">
             <form id="kosForm" onsubmit="saveKos(event)">
-                <div class="p-6 border-b bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-t-2xl flex justify-between items-center sticky top-0 z-10">
+                <div class="p-6 border-b bg-gradient-to-r from-slate-700 to-slate-800 text-white rounded-t-2xl flex justify-between items-center sticky top-0 z-10">
                     <div class="flex items-center space-x-3">
-                        <div class="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
+                        <div class="w-10 h-10 bg-white bg-opacity-10 rounded-lg flex items-center justify-center backdrop-blur-sm">
                             <i class="fas fa-building text-xl"></i>
                         </div>
-                        <h3 id="kosModalTitle" class="text-2xl font-bold">Tambah Kos Baru</h3>
+                        <h3 id="kosModalTitle" class="text-xl font-bold tracking-wide">Tambah Kos Baru</h3>
                     </div>
-                    <button type="button" onclick="closeKosModal()" class="text-white hover:bg-white hover:bg-opacity-20 rounded-full w-10 h-10 flex items-center justify-center transition-all text-2xl">&times;</button>
+                    <button type="button" onclick="closeKosModal()" class="text-white hover:bg-white hover:bg-opacity-20 rounded-full w-10 h-10 flex items-center justify-center transition-all text-xl">&times;</button>
                 </div>
 
-                <div class="p-6">
-                    <div id="kosModalError" class="hidden bg-red-100 text-red-700 p-4 rounded-xl text-sm mb-4 border border-red-200">
-                        <i class="fas fa-exclamation-circle mr-2"></i>
+                <div class="p-8">
+                    <div id="kosModalError" class="hidden bg-red-50 text-red-600 p-4 rounded-xl text-sm mb-6 border border-red-100 flex items-start">
+                        <i class="fas fa-exclamation-circle mt-1 mr-3 flex-shrink-0"></i>
                         <span id="kosModalErrorText"></span>
                     </div>
                     <input type="hidden" name="action" id="kosAction" value="add">
                     <input type="hidden" name="id_kost" id="id_kost">
                     <input type="hidden" name="gambar_lama" id="gambar_lama">
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="space-y-4">
-                            <div>
-                                <label for="nama_kost" class="block text-sm font-medium text-gray-700 mb-2">
-                                    <i class="fas fa-home mr-1 text-purple-600"></i>Nama Kos
-                                </label>
-                                <input type="text" name="nama_kost" id="nama_kost" class="mt-1 block w-full border-2 border-gray-300 rounded-lg shadow-sm p-3 form-input hover:border-purple-400 focus:border-purple-500 transition-all" required>
-                            </div>
-                            <div>
-                                <label for="alamat" class="block text-sm font-medium text-gray-700 mb-2">
-                                    <i class="fas fa-map-marker-alt mr-1 text-purple-600"></i>Alamat
-                                </label>
-                                <textarea name="alamat" id="alamat" rows="3" class="mt-1 block w-full border-2 border-gray-300 rounded-lg shadow-sm p-3 form-input hover:border-purple-400 focus:border-purple-500 transition-all" required></textarea>
-                            </div>
-                            <div>
-                                <label for="harga" class="block text-sm font-medium text-gray-700 mb-2">
-                                    <i class="fas fa-money-bill-wave mr-1 text-purple-600"></i>Harga Default (per bulan)
-                                </label>
-                                <input type="number" name="harga" id="harga" class="mt-1 block w-full border-2 border-gray-300 rounded-lg shadow-sm p-3 form-input hover:border-purple-400 focus:border-purple-500 transition-all" required>
+                    <div class="space-y-6">
+                        <!-- Nama Kos -->
+                        <div>
+                            <label for="nama_kost" class="block text-sm font-semibold text-slate-700 mb-2">
+                                Nama Kos
+                            </label>
+                            <div class="relative">
+                                <span class="absolute left-4 top-3.5 text-slate-400"><i class="fas fa-home"></i></span>
+                                <input type="text" name="nama_kost" id="nama_kost" class="pl-11 block w-full bg-slate-50 border border-slate-200 rounded-xl shadow-sm p-3 focus:bg-white focus:border-slate-500 focus:ring-2 focus:ring-slate-200 transition-all font-medium" placeholder="Contoh: Kos Bahagia" required>
                             </div>
                         </div>
-                        <div class="space-y-4">
+
+                        <!-- Harga dan Tipe -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <label for="deskripsi" class="block text-sm font-medium text-gray-700 mb-2">
-                                    <i class="fas fa-align-left mr-1 text-purple-600"></i>Deskripsi
+                                <label for="harga" class="block text-sm font-semibold text-slate-700 mb-2">
+                                    Harga Sewa <span class="text-slate-400 font-normal">(per bulan)</span>
                                 </label>
-                                <textarea name="deskripsi" id="deskripsi" rows="3" class="mt-1 block w-full border-2 border-gray-300 rounded-lg shadow-sm p-3 form-input hover:border-purple-400 focus:border-purple-500 transition-all" required></textarea>
+                                <div class="relative">
+                                    <span class="absolute left-4 top-3.5 text-slate-400"><i class="fas fa-tag"></i></span>
+                                    <input type="number" name="harga" id="harga" class="pl-11 block w-full bg-slate-50 border border-slate-200 rounded-xl shadow-sm p-3 focus:bg-white focus:border-slate-500 focus:ring-2 focus:ring-slate-200 transition-all font-medium" placeholder="Contoh: 1500000" required>
+                                </div>
                             </div>
                             <div>
-                                <label for="fasilitas" class="block text-sm font-medium text-gray-700 mb-2">
-                                    <i class="fas fa-list-ul mr-1 text-purple-600"></i>Fasilitas (pisahkan dengan koma)
+                                <label for="tipe_kost" class="block text-sm font-semibold text-slate-700 mb-2">
+                                    Tipe Kos
                                 </label>
-                                <input type="text" name="fasilitas" id="fasilitas" class="mt-1 block w-full border-2 border-gray-300 rounded-lg shadow-sm p-3 form-input hover:border-purple-400 focus:border-purple-500 transition-all" required>
+                                <div class="relative">
+                                    <span class="absolute left-4 top-3.5 text-slate-400"><i class="fas fa-venus-mars"></i></span>
+                                    <select name="tipe_kost" id="tipe_kost" class="pl-11 block w-full bg-slate-50 border border-slate-200 rounded-xl shadow-sm p-3 focus:bg-white focus:border-slate-500 focus:ring-2 focus:ring-slate-200 transition-all font-medium appearance-none" required>
+                                        <option value="Campuran">🚻 Campuran</option>
+                                        <option value="Putra">🚹 Putra</option>
+                                        <option value="Putri">🚺 Putri</option>
+                                    </select>
+                                    <div class="absolute right-4 top-3.5 text-slate-400 pointer-events-none">
+                                        <i class="fas fa-chevron-down text-xs"></i>
+                                    </div>
+                                </div>
                             </div>
+                        </div>
+
+                        <!-- Jenis Kamar -->
+                        <div>
+                            <label for="jenis_kamar" class="block text-sm font-semibold text-slate-700 mb-2">
+                                Jenis/Fasilitas Utama Kamar
+                            </label>
+                            <div class="relative">
+                                <span class="absolute left-4 top-3.5 text-slate-400"><i class="fas fa-bed"></i></span>
+                                <select name="jenis_kamar" id="jenis_kamar" class="pl-11 block w-full bg-slate-50 border border-slate-200 rounded-xl shadow-sm p-3 focus:bg-white focus:border-slate-500 focus:ring-2 focus:ring-slate-200 transition-all font-medium appearance-none" required>
+                                    <option value="Kamar Mandi Dalam">🚿 Kamar Mandi Dalam</option>
+                                    <option value="Kamar Mandi Luar">🚪 Kamar Mandi Luar</option>
+                                    <option value="AC + Kamar Mandi Dalam">❄️ AC + Kamar Mandi Dalam</option>
+                                    <option value="AC + Kamar Mandi Luar">❄️ AC + Kamar Mandi Luar</option>
+                                    <option value="VVIP (Lengkap)">💎 VVIP (Lengkap)</option>
+                                </select>
+                                <div class="absolute right-4 top-3.5 text-slate-400 pointer-events-none">
+                                    <i class="fas fa-chevron-down text-xs"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Alamat -->
+                        <div>
+                            <label for="alamat" class="block text-sm font-semibold text-slate-700 mb-2">
+                                Alamat Lengkap
+                            </label>
+                            <div class="relative">
+                                <span class="absolute left-4 top-3.5 text-slate-400"><i class="fas fa-map-marker-alt"></i></span>
+                                <textarea name="alamat" id="alamat" rows="2" class="pl-11 block w-full bg-slate-50 border border-slate-200 rounded-xl shadow-sm p-3 focus:bg-white focus:border-slate-500 focus:ring-2 focus:ring-slate-200 transition-all font-medium" placeholder="Jalan, Nomor, Kota..." required></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Deskripsi -->
+                        <div>
+                            <label for="deskripsi" class="block text-sm font-semibold text-slate-700 mb-2">
+                                Deskripsi
+                            </label>
+                            <div class="relative">
+                                <span class="absolute left-4 top-3.5 text-slate-400"><i class="fas fa-align-left"></i></span>
+                                <textarea name="deskripsi" id="deskripsi" rows="3" class="pl-11 block w-full bg-slate-50 border border-slate-200 rounded-xl shadow-sm p-3 focus:bg-white focus:border-slate-500 focus:ring-2 focus:ring-slate-200 transition-all font-medium" placeholder="Jelaskan fasilitas dan keunggulan kos..." required></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Fasilitas -->
+                        <div>
+                            <label for="fasilitas" class="block text-sm font-semibold text-slate-700 mb-2">
+                                Fasilitas <span class="text-slate-400 font-normal">(Pisahkan dengan koma)</span>
+                            </label>
+                            <div class="relative">
+                                <span class="absolute left-4 top-3.5 text-slate-400"><i class="fas fa-list-ul"></i></span>
+                                <input type="text" name="fasilitas" id="fasilitas" class="pl-11 block w-full bg-slate-50 border border-slate-200 rounded-xl shadow-sm p-3 focus:bg-white focus:border-slate-500 focus:ring-2 focus:ring-2 focus:ring-slate-200 transition-all font-medium" placeholder="WiFi, AC, Kamar Mandi Dalam..." required>
+                            </div>
+                        </div>
+
+                        <!-- Peraturan Kos -->
+                        <div>
+                            <label for="peraturan" class="block text-sm font-semibold text-slate-700 mb-2">
+                                Peraturan Kos <span class="text-slate-400 font-normal">(Opsional)</span>
+                            </label>
+                            <div class="relative">
+                                <span class="absolute left-4 top-3.5 text-slate-400"><i class="fas fa-gavel"></i></span>
+                                <textarea name="peraturan" id="peraturan" rows="3" class="pl-11 block w-full bg-slate-50 border border-slate-200 rounded-xl shadow-sm p-3 focus:bg-white focus:border-slate-500 focus:ring-2 focus:ring-slate-200 transition-all font-medium" placeholder="Contoh: Dilarang merokok, jam malam pukul 22.00, tidak boleh bawa hewan peliharaan..."></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Gambar Utama -->
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-2">Gambar Utama</label>
+                            <div class="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center hover:bg-slate-50 transition-colors relative">
+                                <input type="file" name="gambar" id="gambar" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="previewImage(this, 'image_preview')">
+                                <div id="image_preview" class="h-48 w-full flex flex-col items-center justify-center text-slate-400 pointer-events-none">
+                                    <i class="fas fa-image text-3xl mb-2"></i>
+                                    <p class="text-sm">Klik atau tarik gambar ke sini</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Kategori Foto -->
+                        <div class="space-y-6 border-t pt-4">
+                            <h4 class="font-bold text-gray-800">Galeri Kos</h4>
+                            
+                            <!-- Foto Bangunan -->
                             <div>
-                                <label for="gambar" class="block text-sm font-medium text-gray-700 mb-2">
-                                    <i class="fas fa-image mr-1 text-purple-600"></i>Gambar Kos
-                                </label>
-                                <input type="file" name="gambar" id="gambar" class="mt-1 block w-full text-sm text-gray-600 file:mr-4 file:py-3 file:px-6 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-600 file:text-white hover:file:bg-purple-700 transition-all cursor-pointer">
-                                <div id="image_preview" class="mt-3 h-32 w-full bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl flex items-center justify-center border-2 border-dashed border-purple-300">
-                                    <p class="text-purple-400 flex items-center">
-                                        <i class="fas fa-image mr-2"></i>Preview Gambar
-                                    </p>
+                                <label class="block text-sm font-semibold text-slate-700 mb-2">Foto Bangunan (Tampak Depan/Luaran)</label>
+                                <div id="existing_photos_Bangunan" class="grid grid-cols-4 gap-3 mb-3 empty:hidden"></div>
+                                <div class="border-2 border-dashed border-slate-300 rounded-xl p-3 text-center hover:bg-slate-50 transition-colors relative group">
+                                    <input type="file" name="foto_bangunan[]" multiple class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="previewCategory(this)">
+                                    <div class="flex flex-col items-center justify-center text-slate-400 pointer-events-none">
+                                        <i class="fas fa-building text-xl mb-1 group-hover:text-purple-500 transition-colors"></i>
+                                        <p class="text-xs font-medium text-slate-500">Upload Foto Bangunan</p>
+                                    </div>
+                                </div>
+                                <div class="mt-2 grid grid-cols-4 gap-2 preview-container"></div>
+                            </div>
+
+                            <!-- Foto Kamar -->
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 mb-2">Foto Kamar</label>
+                                <div id="existing_photos_Kamar" class="grid grid-cols-4 gap-3 mb-3 empty:hidden"></div>
+                                <div class="border-2 border-dashed border-slate-300 rounded-xl p-3 text-center hover:bg-slate-50 transition-colors relative group">
+                                    <input type="file" name="foto_kamar[]" multiple class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="previewCategory(this)">
+                                    <div class="flex flex-col items-center justify-center text-slate-400 pointer-events-none">
+                                        <i class="fas fa-bed text-xl mb-1 group-hover:text-purple-500 transition-colors"></i>
+                                        <p class="text-xs font-medium text-slate-500">Upload Foto Kamar</p>
+                                    </div>
+                                </div>
+                                <div class="mt-2 grid grid-cols-4 gap-2 preview-container"></div>
+                            </div>
+
+                            <!-- Foto Kamar Mandi -->
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 mb-2">Foto Kamar Mandi</label>
+                                <div id="existing_photos_Kamar Mandi" class="grid grid-cols-4 gap-3 mb-3 empty:hidden"></div>
+                                <div class="border-2 border-dashed border-slate-300 rounded-xl p-3 text-center hover:bg-slate-50 transition-colors relative group">
+                                    <input type="file" name="foto_kamar_mandi[]" multiple class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="previewCategory(this)">
+                                    <div class="flex flex-col items-center justify-center text-slate-400 pointer-events-none">
+                                        <i class="fas fa-bath text-xl mb-1 group-hover:text-purple-500 transition-colors"></i>
+                                        <p class="text-xs font-medium text-slate-500">Upload Foto Kamar Mandi</p>
+                                    </div>
+                                </div>
+                                <div class="mt-2 grid grid-cols-4 gap-2 preview-container"></div>
+                            </div>
+
+                            <!-- Foto Fasilitas Bersama -->
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 mb-2">Foto Fasilitas Bersama (Dapur, Parkir, dll)</label>
+                                <div id="existing_photos_Fasilitas Bersama" class="grid grid-cols-4 gap-3 mb-3 empty:hidden"></div>
+                                <div class="border-2 border-dashed border-slate-300 rounded-xl p-3 text-center hover:bg-slate-50 transition-colors relative group">
+                                    <input type="file" name="foto_fasilitas[]" multiple class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="previewCategory(this)">
+                                    <div class="flex flex-col items-center justify-center text-slate-400 pointer-events-none">
+                                        <i class="fas fa-users text-xl mb-1 group-hover:text-purple-500 transition-colors"></i>
+                                        <p class="text-xs font-medium text-slate-500">Upload Foto Fasilitas</p>
+                                    </div>
+                                </div>
+                                <div class="mt-2 grid grid-cols-4 gap-2 preview-container"></div>
+                            </div>
+
+                            <!-- Foto Lainnya -->
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 mb-2">Foto Lainnya</label>
+                                <div id="existing_photos_Lainnya" class="grid grid-cols-4 gap-3 mb-3 empty:hidden"></div>
+                                <div class="border-2 border-dashed border-slate-300 rounded-xl p-3 text-center hover:bg-slate-50 transition-colors relative group">
+                                    <input type="file" name="foto_lainnya[]" multiple class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="previewCategory(this)">
+                                    <div class="flex flex-col items-center justify-center text-slate-400 pointer-events-none">
+                                        <i class="fas fa-images text-xl mb-1 group-hover:text-purple-500 transition-colors"></i>
+                                        <p class="text-xs font-medium text-slate-500">Upload Foto Lainnya</p>
+                                    </div>
+                                </div>
+                                <div class="mt-2 grid grid-cols-4 gap-2 preview-container"></div>
+                            </div>
+                            <!-- Tipe Kamar Management -->
+                            <div class="space-y-4 border-t pt-4">
+                                <div class="flex justify-between items-center">
+                                    <h4 class="font-bold text-gray-800">Tipe Kamar (Master Data)</h4>
+                                    <button type="button" onclick="addRoomTypeInput()" class="text-xs bg-purple-100 text-purple-700 px-3 py-1.5 rounded-full font-bold hover:bg-purple-200 transition-colors">
+                                        <i class="fas fa-plus mr-1"></i> Tambah Tipe
+                                    </button>
+                                </div>
+                                <div id="roomTypesContainer" class="space-y-3">
+                                    <!-- Dynamic Inputs -->
                                 </div>
                             </div>
                         </div>
@@ -1729,8 +1991,8 @@ $conn->close();
     </div>
 
     <!-- Modal untuk Kelola Kamar -->
-    <div id="kamarModal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-50 p-4 backdrop-blur-sm">
-        <div id="kamarModalContent" class="bg-white rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl">
+    <div id="kamarModal" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div id="kamarModalContent" class="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl transition-all transform scale-100">
             <!-- Konten dinamis akan dimuat di sini -->
         </div>
     </div>

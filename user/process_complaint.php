@@ -50,6 +50,34 @@ $stmt->bind_param("iis", $id_penyewa, $id_kost, $pesan);
 if ($stmt->execute()) {
     $response['success'] = true;
     $response['message'] = 'Keluhan Anda telah berhasil dikirim. Admin akan segera memprosesnya.';
+
+    // [NEW] Notifikasi ke Admin (All Admins)
+    $stmt_admin = $conn->prepare("SELECT id_user FROM user WHERE role = 'admin'");
+    $stmt_admin->execute();
+    $res_admin = $stmt_admin->get_result();
+    
+    // Dapatkan nama kost untuk pesan notifikasi
+    $stmt_kost = $conn->prepare("SELECT nama_kost FROM kost WHERE id_kost = ?");
+    $stmt_kost->bind_param("i", $id_kost);
+    $stmt_kost->execute();
+    $res_kost = $stmt_kost->get_result();
+    $nama_kost_str = ($res_kost->num_rows > 0) ? $res_kost->fetch_assoc()['nama_kost'] : 'Sebuah Kos';
+    $stmt_kost->close();
+
+    $preview_pesan = (strlen($pesan) > 30) ? substr($pesan, 0, 30) . '...' : $pesan;
+    $pesan_notif_admin = "Keluhan baru di {$nama_kost_str}: {$preview_pesan}";
+    $link_notif_admin = '/KosConnect/dashboard/dashboardadmin.php?module=admin_manage_complaints';
+
+    $stmt_notif_admin = $conn->prepare("INSERT INTO notifications (id_user, pesan, link) VALUES (?, ?, ?)");
+
+    while ($data_admin = $res_admin->fetch_assoc()) {
+        $id_admin = $data_admin['id_user'];
+        $stmt_notif_admin->bind_param("iss", $id_admin, $pesan_notif_admin, $link_notif_admin);
+        $stmt_notif_admin->execute();
+    }
+    
+    $stmt_notif_admin->close();
+    $stmt_admin->close();
 } else {
     $response['message'] = 'Gagal mengirim keluhan. Silakan coba lagi.';
     http_response_code(500);

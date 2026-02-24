@@ -1,0 +1,14 @@
+Found Kos: Kost Halia Nur Tipe A Biringkanaya Makassar (ID: 5)
+Photos:
+  [ID: 1] kost_plus_693fbdf51fb0c9.19220977.png (lainnya)
+  [ID: 2] kost_plus_693fc0841da621.08516674.jpg (lainnya)
+  [ID: 3] kost_plus_693fc08b93f052.59739565.jpg (lainnya)
+  [ID: 4] kost_plus_693fc097c40487.50131779.jpg (lainnya)
+  [ID: 5] kost_plus_693fc17f56ce10.57829477.png (lainnya)
+  [ID: 20] https://res.cloudinary.com/dxhbbcpvz/image/upload/v1765982343/kosconnect/kosts/kost_Bangunan_6942c088ae033.jpg (Bangunan)
+  [ID: 21] https://res.cloudinary.com/dxhbbcpvz/image/upload/v1765982345/kosconnect/kosts/kost_Bangunan_6942c08ab064c.jpg (Bangunan)
+  [ID: 22] https://res.cloudinary.com/dxhbbcpvz/image/upload/v1765982347/kosconnect/kosts/kost_Kamar_6942c08cb0cd1.jpg (Kamar)
+  [ID: 23] https://res.cloudinary.com/dxhbbcpvz/image/upload/v1765982349/kosconnect/kosts/kost_Kamar%20Mandi_6942c08e7cc84.jpg (Kamar Mandi)
+  [ID: 24] https://res.cloudinary.com/dxhbbcpvz/image/upload/v1765982351/kosconnect/kosts/kost_Fasilitas%20Bersama_6942c0908476d.jpg (Fasilitas Bersama)
+  [ID: 25] https://res.cloudinary.com/dxhbbcpvz/image/upload/v1765982353/kosconnect/kosts/kost_Lainnya_6942c092c7a0e.jpg (Lainnya)
+-------------------

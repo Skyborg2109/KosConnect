@@ -157,460 +157,10 @@ $conn->close();
             font-weight: 900;
         }
 
-        @media (max-width: 768px) {
-            nav {
-                padding: 0.5rem 0 !important;
-            }
-
-            nav .flex.justify-between {
-                gap: 0.75rem !important;
-            }
-
-            h1 {
-                font-size: 1.75rem !important;
-            }
-
-            h2 {
-                font-size: 1.25rem !important;
-            }
-
-            h3 {
-                font-size: 1.1rem !important;
-            }
-
-            p {
-                font-size: 0.9rem !important;
-            }
-
-            .hidden.md\:flex {
-                display: none !important;
-            }
-
-            #mobileMenuBtn {
-                display: flex !important;
-            }
-
-            #mobileMenuPanel {
-                width: 80vw !important;
-                max-width: 320px !important;
-            }
-
-            .max-w-7xl {
-                padding: 1rem !important;
-            }
-
-            .px-4 {
-                padding-left: 1rem !important;
-                padding-right: 1rem !important;
-            }
-
-            .px-6 {
-                padding-left: 1rem !important;
-                padding-right: 1rem !important;
-            }
-
-            .px-8 {
-                padding-left: 1rem !important;
-                padding-right: 1rem !important;
-            }
-
-            .py-4 {
-                padding-top: 0.75rem !important;
-                padding-bottom: 0.75rem !important;
-            }
-
-            .py-6 {
-                padding-top: 1rem !important;
-                padding-bottom: 1rem !important;
-            }
-
-            .py-8 {
-                padding-top: 1rem !important;
-                padding-bottom: 1rem !important;
-            }
-
-            .gap-4 {
-                gap: 0.75rem !important;
-            }
-
-            .gap-6 {
-                gap: 0.75rem !important;
-            }
-
-            .space-y-4 > * + * {
-                margin-top: 0.75rem !important;
-            }
-
-            .space-y-6 > * + * {
-                margin-top: 1rem !important;
-            }
-
-            .space-x-4 > * + * {
-                margin-left: 0.75rem !important;
-            }
-
-            .space-x-6 > * + * {
-                margin-left: 0.75rem !important;
-            }
-
-            .grid {
-                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)) !important;
-                gap: 0.75rem !important;
-            }
-
-            .grid.grid-cols-1 {
-                grid-template-columns: 1fr !important;
-            }
-
-            .grid.grid-cols-2 {
-                grid-template-columns: repeat(2, 1fr) !important;
-            }
-
-            .grid.grid-cols-3 {
-                grid-template-columns: 1fr !important;
-            }
-
-            .grid.grid-cols-4 {
-                grid-template-columns: repeat(2, 1fr) !important;
-            }
-
-            .card-hover {
-                padding: 1rem !important;
-                margin: 0 !important;
-                border-radius: 0.75rem !important;
-            }
-
-            .card-hover:hover {
-                transform: translateY(-4px) scale(1.01) !important;
-                box-shadow: 0 10px 20px rgba(147, 51, 234, 0.1) !important;
-            }
-
-            .card-hover img {
-                height: 200px !important;
-                object-fit: cover !important;
-            }
-
-            .card-hover h3 {
-                font-size: 1rem !important;
-                line-height: 1.2 !important;
-            }
-
-            .card-hover p {
-                font-size: 0.85rem !important;
-            }
-
-            .text-sm {
-                font-size: 0.75rem !important;
-            }
-
-            .text-lg {
-                font-size: 1.1rem !important;
-            }
-
-            .text-xl {
-                font-size: 1.25rem !important;
-            }
-
-            .text-2xl {
-                font-size: 1.5rem !important;
-            }
-
-            .text-3xl {
-                font-size: 1.75rem !important;
-            }
-
-            .text-4xl {
-                font-size: 2rem !important;
-            }
-
-            button {
-                padding: 0.75rem 1rem !important;
-                font-size: 0.9rem !important;
-                width: auto !important;
-            }
-
-            .btn-primary,
-            .bg-gradient-to-r.from-purple-600 {
-                width: 100% !important;
-                padding: 0.75rem 1rem !important;
-            }
-
-            input,
-            textarea,
-            select {
-                padding: 0.75rem !important;
-                font-size: 1rem !important;
-                border-radius: 0.5rem !important;
-            }
-
-            .flex {
-                flex-direction: row !important;
-                flex-wrap: wrap !important;
-                gap: 0.75rem !important;
-            }
-
-            .flex.flex-col {
-                flex-direction: column !important;
-                gap: 0.75rem !important;
-            }
-
-            .flex.justify-between {
-                justify-content: space-between !important;
-                gap: 0.5rem !important;
-            }
-
-            .flex.items-center {
-                gap: 0.5rem !important;
-            }
-
-            .flex.space-x-4 {
-                gap: 0.75rem !important;
-            }
-
-            .flex.space-x-6 {
-                gap: 0.75rem !important;
-            }
-
-            .inline-block {
-                display: inline-block !important;
-            }
-
-            .block {
-                display: block !important;
-                width: 100% !important;
-            }
-
-            table {
-                font-size: 0.8rem !important;
-            }
-
-            th,
-            td {
-                padding: 0.5rem !important;
-            }
-
-            .rounded-lg {
-                border-radius: 0.5rem !important;
-            }
-
-            .rounded-xl {
-                border-radius: 0.75rem !important;
-            }
-
-            .shadow-lg {
-                box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08) !important;
-            }
-
-            .shadow-xl {
-                box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08) !important;
-            }
-
-            .m-4 {
-                margin: 0.75rem !important;
-            }
-
-            .m-6 {
-                margin: 1rem !important;
-            }
-
-            .mt-4 {
-                margin-top: 0.75rem !important;
-            }
-
-            .mt-6 {
-                margin-top: 1rem !important;
-            }
-
-            .mb-4 {
-                margin-bottom: 0.75rem !important;
-            }
-
-            .mb-6 {
-                margin-bottom: 1rem !important;
-            }
-
-            .mx-auto {
-                margin-left: auto !important;
-                margin-right: auto !important;
-            }
-
-            .w-full {
-                width: 100% !important;
-            }
-
-            .w-auto {
-                width: auto !important;
-            }
-
-            .wishlist-btn {
-                font-size: 1.25em !important;
-                padding: 0.5rem !important;
-            }
-
-            .wishlist-btn:hover {
-                transform: scale(1.1) !important;
-            }
-
-            .gradient-text {
-                font-size: 1.5rem !important;
-            }
-
-            .badge,
-            .tag {
-                font-size: 0.75rem !important;
-                padding: 0.25rem 0.5rem !important;
-            }
-        }
-
+        /* Simplified Mobile Adjustments */
         @media (max-width: 640px) {
-            h1 {
-                font-size: 1.5rem !important;
-            }
-
-            h2 {
-                font-size: 1.1rem !important;
-            }
-
-            h3 {
-                font-size: 1rem !important;
-            }
-
-            p {
-                font-size: 0.85rem !important;
-            }
-
-            .text-sm {
-                font-size: 0.7rem !important;
-            }
-
-            .text-lg {
-                font-size: 1rem !important;
-            }
-
-            .text-xl {
-                font-size: 1.1rem !important;
-            }
-
-            .text-2xl {
-                font-size: 1.25rem !important;
-            }
-
-            .text-3xl {
-                font-size: 1.5rem !important;
-            }
-
-            .text-4xl {
-                font-size: 1.75rem !important;
-            }
-
-            .grid {
-                grid-template-columns: 1fr !important;
-                gap: 0.5rem !important;
-            }
-
-            .grid.grid-cols-2 {
-                grid-template-columns: 1fr !important;
-            }
-
-            .card-hover {
-                padding: 0.75rem !important;
-                border-radius: 0.5rem !important;
-            }
-
-            .card-hover img {
-                height: 150px !important;
-            }
-
-            .px-4,
-            .px-6,
-            .px-8 {
-                padding-left: 0.75rem !important;
-                padding-right: 0.75rem !important;
-            }
-
-            .py-4,
-            .py-6,
-            .py-8 {
-                padding-top: 0.5rem !important;
-                padding-bottom: 0.5rem !important;
-            }
-
-            .gap-4,
-            .gap-6 {
-                gap: 0.5rem !important;
-            }
-
-            .space-y-4 > * + *,
-            .space-y-6 > * + * {
-                margin-top: 0.5rem !important;
-            }
-
-            .space-x-4 > * + *,
-            .space-x-6 > * + * {
-                margin-left: 0.5rem !important;
-            }
-
-            .flex {
-                flex-direction: column !important;
-                gap: 0.5rem !important;
-            }
-
-            button {
-                padding: 0.65rem 0.9rem !important;
-                font-size: 0.85rem !important;
-            }
-
-            input,
-            textarea,
-            select {
-                padding: 0.65rem !important;
-                font-size: 1rem !important;
-            }
-
-            #mobileMenuPanel {
-                width: 90vw !important;
-                max-width: 300px !important;
-            }
-
-            .rounded-lg {
-                border-radius: 0.375rem !important;
-            }
-
-            .rounded-xl {
-                border-radius: 0.5rem !important;
-            }
-
-            .m-4,
-            .m-6 {
-                margin: 0.5rem !important;
-            }
-
-            .mt-4,
-            .mt-6 {
-                margin-top: 0.5rem !important;
-            }
-
-            .mb-4,
-            .mb-6 {
-                margin-bottom: 0.5rem !important;
-            }
-
-            .wishlist-btn {
-                font-size: 1.1em !important;
-            }
-
-            .shadow-lg,
-            .shadow-xl {
-                box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06) !important;
-            }
-
-            table {
-                font-size: 0.75rem !important;
-            }
-
-            th,
-            td {
-                padding: 0.375rem !important;
+            .mobile-menu-link {
+                padding: 0.75rem 1rem;
             }
         }
     </style>
@@ -643,13 +193,30 @@ $conn->close();
                             <?php endif; ?>
                         </button>
                         <button onclick="showProfileModal()" class="flex items-center space-x-2 p-2 rounded-full hover:bg-gray-100 transition">
-                            <?php if ($userPhoto): ?>
-                                <img id="headerUserPhoto" src="../uploads/profiles/<?php echo htmlspecialchars($userPhoto); ?>" alt="Foto Profil" class="w-9 h-9 rounded-full object-cover">
-                            <?php else: ?>
+                        <button onclick="showProfileModal()" class="flex items-center space-x-2 p-2 rounded-full hover:bg-gray-100 transition">
+                            <?php 
+                            $userPhoto = trim($userPhoto ?? '');
+                            $displayPhoto = false;
+                            $profilePhotoUrl = '';
+
+                            if (!empty($userPhoto)) {
+                                if (strpos($userPhoto, 'http') === 0) {
+                                    $profilePhotoUrl = $userPhoto;
+                                    $displayPhoto = true;
+                                } elseif (file_exists(__DIR__ . '/../uploads/profiles/' . $userPhoto)) {
+                                    $profilePhotoUrl = '../uploads/profiles/' . $userPhoto;
+                                    $displayPhoto = true;
+                                }
+                            }
+
+                            if ($displayPhoto) {
+                            ?>
+                                <img id="headerUserPhoto" src="<?php echo htmlspecialchars($profilePhotoUrl); ?>" alt="Foto Profil" class="w-9 h-9 rounded-full object-cover" onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name=<?php echo urlencode($userName); ?>&background=random';">
+                            <?php } else { ?>
                                 <div id="headerUserPhoto" class="w-9 h-9 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white font-bold">
                                     <?php echo strtoupper(substr($userName, 0, 1)); ?>
                                 </div>
-                            <?php endif; ?>
+                            <?php } ?>
                         </button>
                         <a href="../auth/logout.php" onclick="confirmLogout(event)" class="bg-gradient-to-r from-red-500 to-red-600 text-white px-4 py-2 rounded-lg font-medium text-sm hover:from-red-600 hover:to-red-700">
                             <i class="fas fa-sign-out-alt mr-1"></i>Logout
@@ -758,16 +325,26 @@ $conn->close();
                         <div class="bg-white rounded-2xl shadow-lg overflow-hidden card-hover border border-gray-100" style="animation: slideUp <?php echo 0.2 + ($index * 0.1); ?>s ease-out;">
                             <div class="h-56 w-full relative overflow-hidden group">
                                 <?php 
-                                    $cardImage = ($index % 2 == 0) ? 'kost4.jpg' : 'kost5.jpg';
+                                    $gambar = $kost['gambar'] ?? '';
+                                    $is_url = strpos($gambar, 'http') === 0;
+                                    $img_src = $is_url ? $gambar : '../uploads/kost/' . $gambar;
+                                    
+                                    if (!empty($gambar) && ($is_url || file_exists(__DIR__ . '/../uploads/kost/' . $gambar))) {
+                                        $finalImg = $img_src;
+                                    } else {
+                                        $finalImg = '../img/' . (($index % 2 == 0) ? 'kost4.jpg' : 'kost5.jpg');
+                                    }
                                 ?>
-                                <img src="../img/<?php echo $cardImage; ?>" alt="<?php echo htmlspecialchars($kost['nama_kost']); ?>" class="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500">
-                                <div class="absolute top-4 right-4 flex gap-2">
-                                    <button onclick="toggleWishlist(<?php echo $kost['id_kost']; ?>, this)" class="wishlist-btn bg-white text-red-500 p-2 rounded-full shadow-lg hover:bg-red-50 transition-all duration-300 favorited" title="Hapus dari Favorit">
-                                        <i class="fas fa-heart"></i>
-                                    </button>
-                                    <span class="bg-<?php echo $kost['status_kos'] == 'tersedia' ? 'green' : 'gray'; ?>-600 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-lg">
-                                        <i class="fas fa-check-circle mr-1"></i><?php echo ucfirst($kost['status_kos']); ?>
+                                <img src="<?php echo htmlspecialchars($finalImg); ?>" alt="<?php echo htmlspecialchars($kost['nama_kost']); ?>" class="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500">
+                                <div class="absolute top-3 left-3 z-10">
+                                    <span class="bg-white/90 backdrop-blur-md text-gray-800 px-3 py-1.5 rounded-full text-xs font-bold shadow-sm flex items-center gap-1.5 border border-white/50">
+                                        <i class="fas fa-check-circle text-green-500 text-xs"></i> <?php echo ucfirst($kost['status_kos']); ?>
                                     </span>
+                                </div>
+                                <div class="absolute top-3 right-3 z-10">
+                                    <button onclick="toggleWishlist(<?php echo $kost['id_kost']; ?>, this)" class="wishlist-btn w-9 h-9 flex items-center justify-center bg-white/80 backdrop-blur-md rounded-full shadow-sm hover:bg-white hover:shadow-md transition-all duration-300 group favorited text-red-500" title="Hapus dari Favorit">
+                                        <i class="fas fa-heart text-sm transition-transform group-hover:scale-110"></i>
+                                    </button>
                                 </div>
                             </div>
                             <div class="p-6 flex flex-col h-full">

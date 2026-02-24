@@ -1,4 +1,8 @@
 <?php
+ob_start(); // Start output buffering immediately
+error_reporting(0); // Suppress errors for clean JSON output
+ini_set('display_errors', 0);
+
 session_start();
 header('Content-Type: application/json');
 
@@ -6,27 +10,23 @@ include '../config/db.php';
 
 $response = ['status' => 'error', 'message' => 'Terjadi kesalahan yang tidak diketahui.'];
 
-// 1. Autentikasi: Pastikan pengguna adalah pemilik yang sudah login
-if (!isset($_SESSION['user_logged_in']) || $_SESSION['role'] !== 'pemilik') {
-    $response['message'] = 'Akses tidak sah. Silakan login kembali.';
-    http_response_code(403);
-    echo json_encode($response);
-    exit();
-}
-
-$id_pemilik = $_SESSION['user_id'];
-$id_booking = filter_var($_POST['id_booking'] ?? 0, FILTER_VALIDATE_INT);
-$action = $_POST['action'] ?? ''; // 'confirm' atau 'reject'
-
-if ($id_booking <= 0 || !in_array($action, ['confirm', 'reject'])) {
-    $response['message'] = 'Data yang dikirim tidak valid.';
-    http_response_code(400);
-    echo json_encode($response);
-    exit();
-}
-
-$conn->begin_transaction();
 try {
+    // 1. Autentikasi: Pastikan pengguna adalah pemilik yang sudah login
+    if (!isset($_SESSION['user_logged_in']) || $_SESSION['role'] !== 'pemilik') {
+        throw new Exception('Akses tidak sah. Silakan login kembali.');
+    }
+
+    $id_pemilik = $_SESSION['user_id'];
+    $id_booking = filter_var($_POST['id_booking'] ?? 0, FILTER_VALIDATE_INT);
+    $action = $_POST['action'] ?? ''; // 'confirm' atau 'reject'
+
+    if ($id_booking <= 0 || !in_array($action, ['confirm', 'reject'])) {
+        http_response_code(400);
+        throw new Exception('Data yang dikirim tidak valid.');
+    }
+
+    $conn->begin_transaction();
+    
     // Ambil detail booking untuk verifikasi dan notifikasi
     $stmt_details = $conn->prepare("
         SELECT b.id_penyewa, b.status, k.nama_kamar, t.nama_kost
@@ -35,6 +35,8 @@ try {
         JOIN kost t ON k.id_kost = t.id_kost
         WHERE b.id_booking = ? AND t.id_pemilik = ? FOR UPDATE
     ");
+    if (!$stmt_details) throw new Exception("Database prepare error: " . $conn->error);
+    
     $stmt_details->bind_param("ii", $id_booking, $id_pemilik);
     $stmt_details->execute();
     $details = $stmt_details->get_result()->fetch_assoc();
@@ -81,11 +83,15 @@ try {
     $response['status'] = 'success';
 
 } catch (Exception $e) {
-    $conn->rollback();
+    if (isset($conn)) $conn->rollback();
+    $response['status'] = 'error';
     $response['message'] = $e->getMessage();
-    http_response_code(500);
+    // Keep 200 OK mostly to let frontend handle 'error' status gracefully, or validation error
+    // But user auth error might want 403. 
+    // Logic above used http_response_code for specific cases usually.
 }
 
-$conn->close();
+// Clean buffer (discard any HTML warnings) and output JSON
+ob_end_clean();
 echo json_encode($response);
 ?>

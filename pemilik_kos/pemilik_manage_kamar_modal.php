@@ -1,4 +1,6 @@
 <?php
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 session_start();
 include '../config/db.php';
 
@@ -26,10 +28,40 @@ $kost = $result_check->fetch_assoc();
 $stmt_check->close();
 
 // Ambil daftar kamar
-$stmt_kamar = $conn->prepare("SELECT id_kamar, nama_kamar, harga, status FROM kamar WHERE id_kost = ? ORDER BY nama_kamar ASC");
+// Ambil daftar kamar dengan foto tipe
+$sql_kamar = "SELECT k.id_kamar, k.nama_kamar, k.tipe_kamar, k.harga, k.status, k.foto, k.fasilitas, rt.foto_tipe as foto_tipe_master 
+              FROM kamar k 
+              LEFT JOIN kost_room_types rt ON k.tipe_kamar = rt.nama_tipe AND rt.id_kost = k.id_kost 
+              WHERE k.id_kost = ? 
+              ORDER BY k.nama_kamar ASC";
+$stmt_kamar = $conn->prepare($sql_kamar);
 $stmt_kamar->bind_param("i", $id_kost);
 $stmt_kamar->execute();
 $res_kamar = $stmt_kamar->get_result();
+
+// Ambil daftar tipe kamar (defined Master Data) dengan fasilitas
+// Check if fasilitas column exists first
+$has_fasilitas_column = false;
+try {
+    $check_col = $conn->query("SHOW COLUMNS FROM kost_room_types LIKE 'fasilitas'");
+    $has_fasilitas_column = ($check_col && $check_col->num_rows > 0);
+} catch (Exception $e) {
+    error_log('Error checking fasilitas column: ' . $e->getMessage());
+}
+
+if ($has_fasilitas_column) {
+    $stmt_types = $conn->prepare("SELECT nama_tipe, foto_tipe, fasilitas FROM kost_room_types WHERE id_kost = ?");
+} else {
+    $stmt_types = $conn->prepare("SELECT nama_tipe, foto_tipe, '' as fasilitas FROM kost_room_types WHERE id_kost = ?");
+}
+$stmt_types->bind_param("i", $id_kost);
+$stmt_types->execute();
+$res_types = $stmt_types->get_result();
+$room_types_list = [];
+while($rt = $res_types->fetch_assoc()) {
+    $room_types_list[] = $rt;
+}
+$stmt_types->close();
 ?>
 
 <div class="p-6 border-b flex justify-between items-center modal-header">
@@ -70,12 +102,49 @@ $res_kamar = $stmt_kamar->get_result();
                         ?>
                             <div id="kamar-<?php echo $kamar['id_kamar']; ?>" class="kamar-card flex justify-between items-center p-4 rounded-xl shadow-md" style="animation-delay: <?php echo $index * 0.05; ?>s;">
                                 <div class="flex items-center space-x-4">
-                                    <div class="w-12 h-12 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-xl flex items-center justify-center">
-                                        <i class="fas fa-bed text-purple-600 text-xl"></i>
+                                    <div class="w-16 h-16 rounded-xl overflow-hidden shadow-sm border border-purple-100 flex-shrink-0">
+                                        <?php 
+                                        $foto = $kamar['foto'] ?? '';
+                                        $foto_tipe = $kamar['foto_tipe_master'] ?? '';
+                                        
+                                        $final_img_src = '';
+                                        $show_img = false;
+
+                                        // Prioritas 1: Foto Kamar Spesifik
+                                        if (!empty($foto)) {
+                                            $is_url = strpos($foto, 'http') === 0;
+                                            if ($is_url) {
+                                                $final_img_src = $foto;
+                                                $show_img = true;
+                                            } elseif (file_exists(__DIR__ . '/../uploads/rooms/' . $foto)) {
+                                                $final_img_src = '../uploads/rooms/' . $foto;
+                                                $show_img = true;
+                                            }
+                                        }
+
+                                        // Prioritas 2: Foto Tipe Kamar (Master)
+                                        if (!$show_img && !empty($foto_tipe)) {
+                                            $final_img_src = $foto_tipe; // Asumsi URL Cloudinary dari process_kost
+                                            $show_img = true;
+                                        }
+                                        
+                                        if ($show_img): 
+                                    ?>
+                                        <img src="<?php echo htmlspecialchars($final_img_src); ?>" alt="<?php echo htmlspecialchars($kamar['nama_kamar']); ?>" class="w-full h-full object-cover">
+                                    <?php else: ?>
+                                        <div class="w-full h-full bg-purple-100 flex items-center justify-center text-purple-500">
+                                            <i class="fas fa-bed text-xl"></i>
+                                        </div>
+                                    <?php endif; ?>
                                     </div>
                                     <div>
                                         <p class="font-bold text-gray-800 text-lg"><?php echo htmlspecialchars($kamar['nama_kamar']); ?></p>
-                                        <p class="text-sm price-display">Rp <?php echo number_format($kamar['harga'], 0, ',', '.'); ?>/bulan</p>
+                                        <div class="flex items-center space-x-2">
+                                            <p class="text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100">
+                                                <i class="fas fa-certificate mr-1"></i><?php echo htmlspecialchars($kamar['tipe_kamar'] ?? 'Standard'); ?>
+                                            </p>
+                                            <p class="text-sm price-display font-bold">Rp <?php echo number_format($kamar['harga'], 0, ',', '.'); ?></p>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="flex items-center space-x-3">
@@ -83,7 +152,7 @@ $res_kamar = $stmt_kamar->get_result();
                                         <i class="fas fa-circle mr-1 text-[10px]"></i>
                                         <?php echo ucfirst(htmlspecialchars($kamar['status'])); ?>
                                     </span>
-                                    <button onclick="editKamar(<?php echo $kamar['id_kamar']; ?>, '<?php echo htmlspecialchars($kamar['nama_kamar']); ?>', <?php echo $kamar['harga']; ?>, '<?php echo $kamar['status']; ?>')" class="action-btn edit" title="Edit Kamar">
+                                    <button onclick="editKamar(<?php echo $kamar['id_kamar']; ?>, '<?php echo htmlspecialchars($kamar['nama_kamar']); ?>', '<?php echo htmlspecialchars($kamar['tipe_kamar'] ?? 'Standard'); ?>', <?php echo $kamar['harga']; ?>, '<?php echo $kamar['status']; ?>', '<?php echo $final_img_src; ?>', '<?php echo htmlspecialchars($kamar['fasilitas'] ?? ''); ?>')" class="action-btn edit" title="Edit Kamar">
                                         <i class="fas fa-edit"></i>
                                     </button>
                                     <button onclick="deleteKamar(<?php echo $kamar['id_kamar']; ?>, <?php echo $id_kost; ?>)" class="action-btn delete" title="Hapus Kamar">
@@ -114,13 +183,54 @@ $res_kamar = $stmt_kamar->get_result();
                         <input type="hidden" name="action" id="kamarAction" value="add">
                         <input type="hidden" name="id_kamar" id="kamarId" value="">
                         
-                        <div>
-                            <label for="nama_kamar" class="block text-sm font-bold text-gray-700 mb-2">
-                                <i class="fas fa-tag mr-1 text-purple-600"></i>Nama/Nomor Kamar
-                            </label>
-                            <input type="text" name="nama_kamar" id="nama_kamar" required 
-                                   placeholder="Contoh: 101, Kamar A" 
-                                   class="form-input mt-1 block w-full rounded-lg shadow-sm p-3 bg-white">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="nama_kamar" class="block text-sm font-bold text-gray-700 mb-2">
+                                    <i class="fas fa-tag mr-1 text-purple-600"></i>Nama Kamar
+                                </label>
+                                <input type="text" name="nama_kamar" id="nama_kamar" required 
+                                       placeholder="101, A, Deluxe" 
+                                       oninput="updateRoomNamePreview()"
+                                       class="form-input mt-1 block w-full rounded-lg shadow-sm p-3 bg-white">
+                                <p class="text-xs text-gray-500 mt-1">Nama dasar untuk kamar (akan di-generate otomatis jika jumlah > 1)</p>
+                            </div>
+                            <div id="quantityFieldContainer">
+                                <label for="jumlah_kamar" class="block text-sm font-bold text-gray-700 mb-2">
+                                    <i class="fas fa-hashtag mr-1 text-purple-600"></i>Jumlah Kamar
+                                </label>
+                                <input type="number" name="jumlah_kamar" id="jumlah_kamar" 
+                                       value="1" min="1" max="50" required
+                                       oninput="updateRoomNamePreview()"
+                                       class="form-input mt-1 block w-full rounded-lg shadow-sm p-3 bg-white">
+                                <p class="text-xs text-gray-500 mt-1">Tambahkan 1-50 kamar sekaligus</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Room Name Preview -->
+                        <div id="roomNamePreview" class="hidden bg-purple-50 border-2 border-purple-200 rounded-lg p-4">
+                            <p class="text-sm font-bold text-purple-800 mb-2">
+                                <i class="fas fa-eye mr-1"></i>Preview Nama Kamar yang Akan Dibuat:
+                            </p>
+                            <div id="roomNameList" class="flex flex-wrap gap-2"></div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="tipe_kamar" class="block text-sm font-bold text-gray-700 mb-2">
+                                    <i class="fas fa-certificate mr-1 text-purple-600"></i>Tipe Kamar
+                                </label>
+                                <select name="tipe_kamar" id="tipe_kamar" onchange="updateRoomTypeImage(this)" class="form-input mt-1 block w-full rounded-lg shadow-sm p-3 bg-white">
+                                    <option value="Standard" data-foto="">Standard (Default)</option>
+                                    <?php foreach($room_types_list as $type): ?>
+                                        <option value="<?php echo htmlspecialchars($type['nama_tipe']); ?>" 
+                                                data-foto="<?php echo htmlspecialchars($type['foto_tipe'] ?? ''); ?>"
+                                                data-fasilitas="<?php echo htmlspecialchars($type['fasilitas'] ?? ''); ?>">
+                                            <?php echo htmlspecialchars($type['nama_tipe']); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div></div>
                         </div>
                         
                         <div>
@@ -144,6 +254,34 @@ $res_kamar = $stmt_kamar->get_result();
                                 <option value="terisi">🔴 Terisi</option>
                                 <option value="dipesan">⏳ Dipesan</option>
                             </select>
+                        </div>
+
+                        <div>
+                            <label for="fasilitas_kamar" class="block text-sm font-bold text-gray-700 mb-2">
+                                <i class="fas fa-list-check mr-1 text-purple-600"></i>Fasilitas Kamar
+                            </label>
+                            <textarea name="fasilitas" id="fasilitas_kamar" rows="3" 
+                                   placeholder="Contoh: WiFi, AC, Kasur, Lemari, Meja Belajar, Kamar Mandi Dalam" 
+                                   class="form-input mt-1 block w-full rounded-lg shadow-sm p-3 bg-white resize-none"></textarea>
+                            <p class="text-xs text-gray-500 mt-1">Pisahkan dengan koma (,) untuk setiap fasilitas</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">
+                                <i class="fas fa-camera mr-1 text-purple-600"></i>Foto Kamar
+                            </label>
+                            <div class="mt-2 flex items-center space-x-4">
+                                <div id="kamarPhotoPreview" class="w-24 h-24 rounded-xl border-2 border-dashed border-purple-200 flex items-center justify-center overflow-hidden bg-white">
+                                    <i class="fas fa-image text-purple-200 text-3xl"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <input type="file" name="foto_kamar" id="foto_kamar" accept="image/*" class="hidden" onchange="previewKamarPhoto(this)">
+                                    <button type="button" onclick="document.getElementById('foto_kamar').click()" class="bg-white border-2 border-purple-500 text-purple-600 px-4 py-2 rounded-lg font-bold hover:bg-purple-50 transition-all flex items-center">
+                                        <i class="fas fa-upload mr-2"></i>Pilih Foto
+                                    </button>
+                                    <p class="text-xs text-gray-500 mt-2">Format: JPG, PNG, WEBP (Maks. 2MB)</p>
+                                </div>
+                            </div>
                         </div>
                         
                         <div id="kamarFormError" class="hidden bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded-lg text-sm">
@@ -439,6 +577,160 @@ $res_kamar = $stmt_kamar->get_result();
         }
     }
 </style>
+
+<script>
+    function updateRoomTypeImage(select) {
+        const selectedOption = select.options[select.selectedIndex];
+        const fotoUrl = selectedOption.getAttribute('data-foto');
+        const fasilitasData = selectedOption.getAttribute('data-fasilitas');
+        const preview = document.getElementById('kamarPhotoPreview');
+        const fileInput = document.getElementById('foto_kamar');
+        const fasilitasTextarea = document.getElementById('fasilitas_kamar');
+        
+        // Auto-fill facilities from room type
+        if (fasilitasData && fasilitasData.trim() !== '') {
+            // Only auto-fill if textarea is empty or in add mode
+            const isEditMode = document.getElementById('kamarAction').value === 'edit';
+            if (!isEditMode || !fasilitasTextarea.value || fasilitasTextarea.value.trim() === '') {
+                fasilitasTextarea.value = fasilitasData;
+                // Add visual feedback
+                fasilitasTextarea.style.borderColor = '#3b82f6';
+                fasilitasTextarea.style.backgroundColor = '#eff6ff';
+                setTimeout(() => {
+                    fasilitasTextarea.style.borderColor = '';
+                    fasilitasTextarea.style.backgroundColor = '';
+                }, 1000);
+            }
+        }
+
+        // Only update if no custom file is currently selected (optional logic, but good UX)
+        // Actually user wants to see the type image, so we show it properly.
+        
+        // If file input has files, we show the file preview (handled by onchange="previewKamarPhoto"). 
+        // If we change type, we might want to override or show the type image as "base". 
+        // Let's assume changing type shows the type image as preview if currently showing default placeholder.
+        
+        if (fotoUrl && fotoUrl.trim() !== '') {
+            let src = fotoUrl;
+            // Handle if it's local path ? likely standard URL from cloudinary or path
+            // Our standard seems to be full URL or relative
+            if (!src.startsWith('http')) {
+                // It might be relative from process_kost, usually kept as full URL if from cloudinary
+                // or local relative path.
+                 // ../uploads if logic used simply
+            }
+            
+            preview.innerHTML = `<img src="${src}" class="w-full h-full object-cover">`;
+        } else {
+             // If no type image, revert to placeholder ONLY if we don't have a specific room image loaded (editing)
+             // This is tricky during Edit.
+             // Simplest: If no URL, show placeholder.
+             if (!fileInput.files.length) {
+                 // Check if we are editing and have an existing image? 
+                 // The easiest is just: if no URL, show placeholder.
+                 preview.innerHTML = `<i class="fas fa-image text-purple-200 text-3xl"></i>`;
+             }
+        }
+    }
+
+    
+    // Hook into existing editKamar to trigger this update if useful, 
+    // or editKamar handles its own image loading.
+    // editKamar calls: 
+    // document.getElementById('kamarPhotoPreview').innerHTML = `<img src="${imgSrc}"...`
+    // So editKamar takes precedence, which is correct.
+    
+    // But specific logic: if I edit a room, it has a photo. I change type -> show type photo?
+    // User request: "foto gambar di tampilkan di form ini dan sesuai dengn tipe kamar yang dipilih"
+    // So YES, selecting type should update preview.
+    
+    /**
+     * Generate room names based on base name and quantity
+     */
+    function generateRoomNames(baseName, quantity) {
+        if (!baseName || quantity < 1) return [];
+        
+        const names = [];
+        baseName = baseName.trim();
+        
+        // Check if base name is purely numeric (e.g., "101")
+        if (/^\d+$/.test(baseName)) {
+            const baseNum = parseInt(baseName);
+            for (let i = 0; i < quantity; i++) {
+                names.push(String(baseNum + i));
+            }
+        }
+        // Check if base name is a single letter (e.g., "A")
+        else if (/^[A-Za-z]$/.test(baseName)) {
+            for (let i = 1; i <= quantity; i++) {
+                names.push(`${baseName}-${i}`);
+            }
+        }
+        // Otherwise treat as text (e.g., "Deluxe", "VIP")
+        else {
+            for (let i = 1; i <= quantity; i++) {
+                names.push(`${baseName} ${i}`);
+            }
+        }
+        
+        return names;
+    }
+    
+    /**
+     * Update room name preview when quantity or base name changes
+     */
+    function updateRoomNamePreview() {
+        const baseName = document.getElementById('nama_kamar').value;
+        const quantity = parseInt(document.getElementById('jumlah_kamar').value) || 1;
+        const previewContainer = document.getElementById('roomNamePreview');
+        const nameList = document.getElementById('roomNameList');
+        
+        // Only show preview if quantity > 1
+        if (quantity > 1 && baseName) {
+            const names = generateRoomNames(baseName, quantity);
+            
+            // Show max 20 names in preview to avoid overwhelming UI
+            const displayNames = names.slice(0, 20);
+            const hasMore = names.length > 20;
+            
+            nameList.innerHTML = displayNames.map(name => 
+                `<span class="bg-white border-2 border-purple-300 text-purple-700 px-3 py-1 rounded-lg text-sm font-semibold shadow-sm">
+                    ${name}
+                </span>`
+            ).join('');
+            
+            if (hasMore) {
+                nameList.innerHTML += `<span class="text-purple-600 text-sm font-semibold px-3 py-1">
+                    ... dan ${names.length - 20} lainnya
+                </span>`;
+            }
+            
+            previewContainer.classList.remove('hidden');
+        } else {
+            previewContainer.classList.add('hidden');
+        }
+    }
+    
+    /**
+     * Toggle quantity field visibility based on mode (add/edit)
+     */
+    function toggleQuantityField(mode) {
+        const quantityContainer = document.getElementById('quantityFieldContainer');
+        const quantityInput = document.getElementById('jumlah_kamar');
+        const previewContainer = document.getElementById('roomNamePreview');
+        
+        if (mode === 'edit') {
+            // Hide quantity field in edit mode
+            quantityContainer.classList.add('hidden');
+            previewContainer.classList.add('hidden');
+            quantityInput.value = 1;
+        } else {
+            // Show quantity field in add mode
+            quantityContainer.classList.remove('hidden');
+        }
+    }
+
+</script>
 
 <?php
 $stmt_kamar->close();

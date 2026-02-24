@@ -18,13 +18,11 @@ class SessionManager {
     public function createSessionToken($user_id, $device_name = null) {
         $this->user_id = $user_id;
         
-        // Generate random token
         $token = bin2hex(random_bytes(32));
         $device_name = $device_name ?? $this->getDeviceName();
         $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown';
         $ip_address = $this->getClientIP();
         
-        // Insert ke database
         $sql = "INSERT INTO user_sessions (id_user, session_token, device_name, user_agent, ip_address) 
                 VALUES (?, ?, ?, ?, ?)";
         $stmt = mysqli_prepare($this->conn, $sql);
@@ -54,7 +52,6 @@ class SessionManager {
         
         if ($result && mysqli_num_rows($result) > 0) {
             $session = mysqli_fetch_assoc($result);
-            // Update last activity
             $this->updateLastActivity($token);
             return $session['id_user'];
         }
@@ -130,8 +127,6 @@ class SessionManager {
      */
     private function getDeviceName() {
         $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown Device';
-        
-        // Detect OS
         if (strpos($user_agent, 'Windows') !== false) {
             $os = 'Windows';
         } elseif (strpos($user_agent, 'Mac') !== false) {
@@ -146,7 +141,6 @@ class SessionManager {
             $os = 'Unknown OS';
         }
         
-        // Detect Browser
         if (strpos($user_agent, 'Chrome') !== false) {
             $browser = 'Chrome';
         } elseif (strpos($user_agent, 'Safari') !== false) {

@@ -23,7 +23,12 @@ $sql_stats = "SELECT
     (SELECT COUNT(id_complaint) FROM complaint WHERE status IN ('baru', 'diproses')) AS total_complaint_open,
     (SELECT COUNT(id_payment) FROM pembayaran WHERE status_pembayaran = 'menunggu') AS total_payment_pending,
     (SELECT COUNT(id_user) FROM user WHERE role = 'penyewa') AS total_penyewa";
-$stats = $conn->query($sql_stats)->fetch_assoc();
+
+$res_stats = $conn->query($sql_stats);
+if (!$res_stats) {
+    die("Error getting stats: " . $conn->error);
+}
+$stats = $res_stats->fetch_assoc();
 $total_penyewa = $stats['total_user'] - $stats['total_pemilik'] - 1;
 
 // Daftar 5 Pembayaran Terbaru
@@ -82,6 +87,9 @@ if ($res_revenue) {
             $total_revenue_six_months += $val;
         }
     }
+} else {
+    // Log error but don't stop execution, show empty chart
+    error_log("Revenue Query Error: " . $conn->error);
 }
 
 // Extract data values sesuai urutan map
@@ -97,6 +105,8 @@ if ($res_booking_status) {
         $chart_booking_labels[] = ucfirst($row['status']);
         $chart_booking_data[] = $row['count'];
     }
+} else {
+    error_log("Booking Status Query Error: " . $conn->error);
 }
 ?>
 
@@ -267,11 +277,19 @@ if ($res_booking_status) {
                     <td class="px-6 py-4">
                         <?php
                         $status = $row['status_pembayaran'];
-                        $colorClass = match($status) {
-                            'disetujui' => 'bg-green-100 text-green-700',
-                            'menunggu' => 'bg-yellow-100 text-yellow-700',
-                            'ditolak' => 'bg-red-100 text-red-700',
-                            default => 'bg-gray-100 text-gray-700'
+                        $colorClass = '';
+                        switch($status) {
+                            case 'disetujui':
+                                $colorClass = 'bg-green-100 text-green-700';
+                                break;
+                            case 'menunggu':
+                                $colorClass = 'bg-yellow-100 text-yellow-700';
+                                break;
+                            case 'ditolak':
+                                $colorClass = 'bg-red-100 text-red-700';
+                                break;
+                            default:
+                                $colorClass = 'bg-gray-100 text-gray-700';
                         };
                         ?>
                         <span class="px-2.5 py-1 rounded-full text-xs font-semibold <?php echo $colorClass; ?>">

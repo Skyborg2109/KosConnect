@@ -73,8 +73,13 @@ while($owner = $res_owners->fetch_assoc()) {
         <div class="bg-white rounded-xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden group" data-kos-id="<?php echo $kos['id_kost']; ?>">
             <!-- Image Section -->
             <div class="relative h-48 bg-gradient-to-br from-blue-400 to-purple-500 overflow-hidden">
-                <?php if($kos['gambar']): ?>
-                    <img src="../uploads/kost/<?php echo htmlspecialchars($kos['gambar']); ?>" 
+                <?php 
+                    $gambar = $kos['gambar'] ?? '';
+                    $is_url = strpos($gambar, 'http') === 0;
+                    $img_src = $is_url ? $gambar : '../uploads/kost/' . $gambar;
+                ?>
+                <?php if($gambar): ?>
+                    <img src="<?php echo htmlspecialchars($img_src); ?>" 
                          alt="<?php echo htmlspecialchars($kos['nama_kost']); ?>" 
                          class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300">
                 <?php else: ?>
@@ -156,121 +161,118 @@ while($owner = $res_owners->fetch_assoc()) {
 </div>
 
 <!-- Modal Form Kos -->
-<div id="kostModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+<div id="kostModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto">
         <!-- Header -->
-        <div class="sticky top-0 bg-gradient-to-r from-blue-600 to-purple-600 p-6 flex justify-between items-center rounded-t-2xl">
+        <div class="sticky top-0 bg-gradient-to-r from-blue-600 to-purple-600 p-6 flex justify-between items-center rounded-t-2xl z-10">
             <div>
-                <h3 id="modalTitle" class="text-3xl font-bold text-white">Tambah Kos Baru</h3>
+                <h3 id="modalTitle" class="text-2xl font-bold text-white">Tambah Kos Baru</h3>
                 <p id="modalSubtitle" class="text-blue-100 text-sm mt-1">Isi form dibawah untuk menambahkan data kos baru</p>
             </div>
-            <button onclick="closeKosModal()" class="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors">
-                <i class="fas fa-times text-2xl"></i>
+            <button onclick="closeKosModal()" class="text-white hover:bg-white hover:bg-opacity-20 w-10 h-10 flex items-center justify-center rounded-full transition-colors">
+                <i class="fas fa-times text-xl"></i>
             </button>
         </div>
         
-        <form id="kostForm" class="p-8" enctype="multipart/form-data">
+        <form id="kostForm" class="p-8 space-y-6" enctype="multipart/form-data">
             <input type="hidden" id="kost-id" name="kost_id" value="">
             <input type="hidden" name="action" value="add">
 
-            <!-- Grid Layout for Form -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <!-- Nama Kos -->
-                <div>
-                    <label for="kost-nama" class="block text-sm font-semibold text-gray-700 mb-2">
-                        <i class="fas fa-building mr-2 text-blue-600"></i>Nama Kos *
-                    </label>
-                    <input type="text" id="kost-nama" name="nama_kost" required 
-                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                        placeholder="Contoh: Kos Manis">
-                </div>
+            <!-- Nama Kos -->
+            <div>
+                <label for="kost-nama" class="block text-sm font-semibold text-gray-700 mb-2">
+                    <i class="fas fa-building mr-2 text-blue-600"></i>Nama Kos *
+                </label>
+                <input type="text" id="kost-nama" name="nama_kost" required 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    placeholder="Contoh: Kos Manis">
+            </div>
 
-                <!-- Pemilik (Dropdown) -->
-                <div>
-                    <label for="kost-pemilik" class="block text-sm font-semibold text-gray-700 mb-2">
-                        <i class="fas fa-user mr-2 text-blue-600"></i>Pemilik Kos *
-                    </label>
-                    <select id="kost-pemilik" name="id_pemilik" required 
-                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
-                        <option value="">-- Pilih Pemilik --</option>
-                        <?php foreach($owners as $owner): ?>
-                        <option value="<?php echo $owner['id_user']; ?>">
-                            <?php echo htmlspecialchars($owner['nama_lengkap']); ?>
-                        </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
+            <!-- Pemilik (Dropdown) -->
+            <div>
+                <label for="kost-pemilik" class="block text-sm font-semibold text-gray-700 mb-2">
+                    <i class="fas fa-user mr-2 text-blue-600"></i>Pemilik Kos *
+                </label>
+                <select id="kost-pemilik" name="id_pemilik" required 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
+                    <option value="">-- Pilih Pemilik --</option>
+                    <?php foreach($owners as $owner): ?>
+                    <option value="<?php echo $owner['id_user']; ?>">
+                        <?php echo htmlspecialchars($owner['nama_lengkap']); ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
 
-                <!-- Harga -->
-                <div>
-                    <label for="kost-harga" class="block text-sm font-semibold text-gray-700 mb-2">
-                        <i class="fas fa-money-bill mr-2 text-blue-600"></i>Harga Kamar (per bulan) *
-                    </label>
-                    <div class="relative">
-                        <span class="absolute left-4 top-3 text-gray-500 font-semibold">Rp</span>
-                        <input type="number" id="kost-harga" name="harga" required min="0" step="1000"
-                            class="w-full px-4 py-3 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                            placeholder="100000">
-                    </div>
+            <!-- Harga -->
+            <div>
+                <label for="kost-harga" class="block text-sm font-semibold text-gray-700 mb-2">
+                    <i class="fas fa-money-bill mr-2 text-blue-600"></i>Harga Kamar (per bulan) *
+                </label>
+                <div class="relative">
+                    <span class="absolute left-4 top-3.5 text-gray-500 font-semibold">Rp</span>
+                    <input type="number" id="kost-harga" name="harga" required min="0" step="1000"
+                        class="w-full px-4 py-3 pl-10 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                        placeholder="100000">
                 </div>
             </div>
 
             <!-- Alamat -->
-            <div class="mb-6">
+            <div>
                 <label for="kost-alamat" class="block text-sm font-semibold text-gray-700 mb-2">
                     <i class="fas fa-map-marker-alt mr-2 text-blue-600"></i>Alamat *
                 </label>
                 <textarea id="kost-alamat" name="alamat" rows="3" required
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                     placeholder="Jalan, No. Rumah, Kelurahan, Kecamatan, Kota"></textarea>
             </div>
 
             <!-- Deskripsi -->
-            <div class="mb-6">
+            <div>
                 <label for="kost-deskripsi" class="block text-sm font-semibold text-gray-700 mb-2">
                     <i class="fas fa-file-alt mr-2 text-blue-600"></i>Deskripsi *
                 </label>
                 <textarea id="kost-deskripsi" name="deskripsi" rows="4" required
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                     placeholder="Deskripsi lengkap tentang kos..."></textarea>
             </div>
 
             <!-- Fasilitas -->
-            <div class="mb-6">
+            <div>
                 <label for="kost-fasilitas" class="block text-sm font-semibold text-gray-700 mb-2">
                     <i class="fas fa-check-circle mr-2 text-blue-600"></i>Fasilitas
                 </label>
                 <textarea id="kost-fasilitas" name="fasilitas" rows="2" 
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                     placeholder="Contoh: WiFi, AC, Kasur (pisahkan dengan koma)"></textarea>
                 <p class="text-xs text-gray-500 mt-1"><i class="fas fa-info-circle mr-1"></i>Pisahkan fasilitas dengan tanda koma</p>
             </div>
 
             <!-- Gambar -->
-            <div class="mb-6">
+            <div>
                 <label for="kost-gambar" class="block text-sm font-semibold text-gray-700 mb-2">
                     <i class="fas fa-image mr-2 text-blue-600"></i>Gambar Kos
                 </label>
-                <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition-colors cursor-pointer" id="dragDropArea">
+                <div class="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-blue-500 transition-colors cursor-pointer bg-gray-50 hover:bg-white" id="dragDropArea">
                     <input type="file" id="kost-gambar" name="gambar" accept="image/*" class="hidden">
                     <div id="uploadPrompt">
-                        <i class="fas fa-cloud-upload-alt text-5xl text-gray-300 mb-3"></i>
+                        <i class="fas fa-cloud-upload-alt text-5xl text-gray-300 mb-3 block"></i>
                         <p class="text-gray-600 font-semibold">Drag dan drop gambar di sini</p>
                         <p class="text-gray-500 text-sm">atau <span class="text-blue-600 cursor-pointer hover:underline">klik untuk memilih</span></p>
                     </div>
                 </div>
-                <img id="kost-gambar-preview" src="" alt="Preview" class="hidden mt-4 max-h-32 rounded-lg mx-auto border border-gray-300">
+                <img id="kost-gambar-preview" src="" alt="Preview" class="hidden mt-4 h-48 w-full object-cover rounded-xl border border-gray-300">
                 <input type="hidden" id="kost-gambar-lama" name="gambar_lama" value="">
             </div>
 
             <!-- Button -->
             <div class="flex justify-end gap-3 pt-6 border-t border-gray-200">
                 <button type="button" onclick="closeKosModal()" 
-                    class="px-6 py-3 border-2 border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-50 transition-colors">
+                    class="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 font-semibold hover:bg-gray-50 transition-colors">
                     <i class="fas fa-times mr-2"></i>Batal
                 </button>
                 <button type="submit" 
-                    class="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 shadow-lg hover:shadow-xl transition-all">
+                    class="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-blue-800 shadow-md hover:shadow-lg transition-all">
                     <i class="fas fa-save mr-2"></i><span id="btnText">Simpan</span>
                 </button>
             </div>
@@ -326,7 +328,8 @@ window.loadKosForEdit = function(kosId) {
                 
                 // Show preview if image exists
                 if (kos.gambar) {
-                    document.getElementById('kost-gambar-preview').src = `../uploads/kost/${kos.gambar}`;
+                    const imgSrc = kos.gambar.startsWith('http') ? kos.gambar : `../uploads/kost/${kos.gambar}`;
+                    document.getElementById('kost-gambar-preview').src = imgSrc;
                     document.getElementById('kost-gambar-preview').classList.remove('hidden');
                     document.getElementById('uploadPrompt').classList.add('hidden');
                 }
