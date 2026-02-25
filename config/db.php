@@ -1,96 +1,39 @@
 <?php
-/**
- * Database Configuration
- * 
- * IMPORTANT: Ganti kredensial berikut dengan kredensial dari hosting Anda
- * Untuk InfinityFree, cek di cPanel -> MySQL Databases
- */
-
 // === DETECT ENVIRONMENT & SET CREDENTIALS ===
-$host = $_ENV['MYSQLHOST'] ?? $_SERVER['MYSQLHOST'] ?? getenv('MYSQLHOST');
-
-if ($host) {
-    // Railway Configuration
-    $user = $_ENV['MYSQLUSER'] ?? $_SERVER['MYSQLUSER'] ?? getenv('MYSQLUSER');
-    $pass = $_ENV['MYSQLPASSWORD'] ?? $_SERVER['MYSQLPASSWORD'] ?? getenv('MYSQLPASSWORD');
-    $dbname = $_ENV['MYSQLDATABASE'] ?? $_SERVER['MYSQLDATABASE'] ?? getenv('MYSQLDATABASE');
-    $port = $_ENV['MYSQLPORT'] ?? $_SERVER['MYSQLPORT'] ?? getenv('MYSQLPORT') ?: "3306";
-
-    // Safety check: force 127.0.0.1 if host is localhost to avoid socket error (Error 2002)
-    if ($host === 'localhost') {
-        $host = '127.0.0.1';
-    }
-} else {
-    // Local Development Configuration
-    $host = "127.0.0.1"; // Changed from 'localhost' to force TCP and avoid socket errors
-    $user = "root";
-    $pass = "";
-    $dbname = "kosconnect";
-    $port = "3306";
-}
-
+// Menambah metode $_SERVER untuk memastikan variabel terbaca di berbagai jenis server cloud
+$host   = getenv('DB_HOST') ?: $_ENV['DB_HOST'] ?: (isset($_SERVER['DB_HOST']) ? $_SERVER['DB_HOST'] : "localhost");
+$user   = getenv('DB_USER') ?: $_ENV['DB_USER'] ?: (isset($_SERVER['DB_USER']) ? $_SERVER['DB_USER'] : "root");
+$pass   = getenv('DB_PASS') ?: $_ENV['DB_PASS'] ?: (isset($_SERVER['DB_PASS']) ? $_SERVER['DB_PASS'] : "");
+$dbname = getenv('DB_NAME') ?: $_ENV['DB_NAME'] ?: (isset($_SERVER['DB_NAME']) ? $_SERVER['DB_NAME'] : "kosconnect");
+$port   = getenv('DB_PORT') ?: $_ENV['DB_PORT'] ?: (isset($_SERVER['DB_PORT']) ? $_SERVER['DB_PORT'] : "3306");
 
 // === DATABASE CONNECTION ===
 try {
     $conn = new mysqli($host, $user, $pass, $dbname, $port);
     
-    // Check connection
     if ($conn->connect_error) {
-        // Log error untuk debugging
-        error_log("Database connection failed: " . $conn->connect_error);
-        
-        // Tampilkan pesan user-friendly
-        http_response_code(500);
-        die("
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Database Connection Error</title>
-            <style>
-                body { font-family: Arial, sans-serif; padding: 50px; text-align: center; }
-                .error-box { 
-                    background: #fee; 
-                    border: 2px solid #f00; 
-                    padding: 20px; 
-                    border-radius: 10px; 
-                    max-width: 600px; 
-                    margin: 0 auto; 
-                }
-                h1 { color: #c00; }
-                .details { 
-                    background: #fff; 
-                    padding: 15px; 
-                    margin-top: 20px; 
-                    border-radius: 5px; 
-                    text-align: left; 
-                }
-            </style>
-        </head>
-        <body>
-            <div class='error-box'>
-                <h1>⚠️ Database Connection Error</h1>
-                <p>Tidak dapat terhubung ke database. Silakan periksa konfigurasi database Anda.</p>
-                <div class='details'>
-                    <h3>Langkah Troubleshooting:</h3>
-                    <ol>
-                        <li>Pastikan database sudah dibuat di cPanel</li>
-                        <li>Verifikasi kredensial di file <code>config/db.php</code></li>
-                        <li>Pastikan user database memiliki privileges</li>
-                        <li>Import file SQL ke database</li>
-                    </ol>
-                    <p><strong>Error:</strong> " . $conn->connect_error . "</p>
-                </div>
-            </div>
-        </body>
-        </html>
-        ");
+        throw new Exception($conn->connect_error);
     }
     
-    // Set charset untuk mendukung karakter Indonesia
     $conn->set_charset("utf8mb4");
     
 } catch (Throwable $e) {
-    error_log("Database error: " . $e->getMessage());
     http_response_code(500);
-    die("Database connection error. Details: " . $e->getMessage());
+    // Bagian ini akan mencetak nilai variabel ke layar agar kita tahu apa yang salah terbaca
+    die("
+    <div style='font-family: Arial; padding: 20px; border: 2px solid red; background: #fee; max-width: 600px; margin: 20px auto;'>
+        <h2 style='color: red;'>Koneksi Database Gagal</h2>
+        <p><strong>Error MySQL:</strong> " . $e->getMessage() . "</p>
+        <hr>
+        <h3>🔍 Hasil Debugging Variabel:</h3>
+        <p>Berikut adalah data yang sedang dicoba dibaca oleh sistem (Jika Host berisi 'localhost', berarti variabel Railway belum masuk/terbaca):</p>
+        <ul>
+            <li><strong>Host:</strong> <code>" . htmlspecialchars($host) . "</code></li>
+            <li><strong>User:</strong> <code>" . htmlspecialchars($user) . "</code></li>
+            <li><strong>Database:</strong> <code>" . htmlspecialchars($dbname) . "</code></li>
+            <li><strong>Port:</strong> <code>" . htmlspecialchars($port) . "</code></li>
+        </ul>
+    </div>
+    ");
 }
+?>
