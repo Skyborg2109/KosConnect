@@ -7,14 +7,33 @@
 
 // === PRODUCTION CONFIGURATION (InfinityFree) ===
 // Ganti dengan kredensial dari hosting Anda
-$host = "sql###.infinityfree.com"; // Ganti ### dengan nomor server Anda (cek di cPanel)
-$user = "epiz_xxxxx"; // Ganti dengan username database Anda
-$pass = "your_password_here"; // Ganti dengan password database Anda
-$dbname = "epiz_xxxxx_kosconnect"; // Ganti dengan nama database Anda
+// === DETECT ENVIRONMENT & SET CREDENTIALS ===
+$host = $_ENV['MYSQLHOST'] ?? $_SERVER['MYSQLHOST'] ?? getenv('MYSQLHOST');
+
+if ($host) {
+    // Railway Configuration
+    $user = $_ENV['MYSQLUSER'] ?? $_SERVER['MYSQLUSER'] ?? getenv('MYSQLUSER');
+    $pass = $_ENV['MYSQLPASSWORD'] ?? $_SERVER['MYSQLPASSWORD'] ?? getenv('MYSQLPASSWORD');
+    $dbname = $_ENV['MYSQLDATABASE'] ?? $_SERVER['MYSQLDATABASE'] ?? getenv('MYSQLDATABASE');
+    $port = $_ENV['MYSQLPORT'] ?? $_SERVER['MYSQLPORT'] ?? getenv('MYSQLPORT') ?: "3306";
+    
+    // Safety check: force 127.0.0.1 if host is localhost to avoid socket error
+    if ($host === 'localhost') {
+        $host = '127.0.0.1';
+    }
+} else {
+    // PRODUCTION CONFIGURATION (InfinityFree/Fallback)
+    // Ganti dengan kredensial dari hosting Anda jika tidak menggunakan Railway
+    $host = "sql###.infinityfree.com"; // Ganti ### dengan nomor server Anda (cek di cPanel)
+    $user = "epiz_xxxxx"; // Ganti dengan username database Anda
+    $pass = "your_password_here"; // Ganti dengan password database Anda
+    $dbname = "epiz_xxxxx_kosconnect"; // Ganti dengan nama database Anda
+    $port = "3306";
+}
 
 // === DATABASE CONNECTION ===
 try {
-    $conn = new mysqli($host, $user, $pass, $dbname);
+    $conn = new mysqli($host, $user, $pass, $dbname, $port);
     
     // Check connection
     if ($conn->connect_error) {

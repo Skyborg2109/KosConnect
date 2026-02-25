@@ -7,16 +7,22 @@
  */
 
 // === DETECT ENVIRONMENT & SET CREDENTIALS ===
-if (getenv('MYSQLHOST')) {
+$host = $_ENV['MYSQLHOST'] ?? $_SERVER['MYSQLHOST'] ?? getenv('MYSQLHOST');
+
+if ($host) {
     // Railway Configuration
-    $host = getenv('MYSQLHOST');
-    $user = getenv('MYSQLUSER');
-    $pass = getenv('MYSQLPASSWORD');
-    $dbname = getenv('MYSQLDATABASE');
-    $port = getenv('MYSQLPORT') ?: "3306";
+    $user = $_ENV['MYSQLUSER'] ?? $_SERVER['MYSQLUSER'] ?? getenv('MYSQLUSER');
+    $pass = $_ENV['MYSQLPASSWORD'] ?? $_SERVER['MYSQLPASSWORD'] ?? getenv('MYSQLPASSWORD');
+    $dbname = $_ENV['MYSQLDATABASE'] ?? $_SERVER['MYSQLDATABASE'] ?? getenv('MYSQLDATABASE');
+    $port = $_ENV['MYSQLPORT'] ?? $_SERVER['MYSQLPORT'] ?? getenv('MYSQLPORT') ?: "3306";
+
+    // Safety check: force 127.0.0.1 if host is localhost to avoid socket error (Error 2002)
+    if ($host === 'localhost') {
+        $host = '127.0.0.1';
+    }
 } else {
     // Local Development Configuration
-    $host = "localhost";
+    $host = "127.0.0.1"; // Changed from 'localhost' to force TCP and avoid socket errors
     $user = "root";
     $pass = "";
     $dbname = "kosconnect";
